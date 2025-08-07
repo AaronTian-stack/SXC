@@ -2036,7 +2036,7 @@ public:
     }
 
     for (size_t i_group = 0; i_group < parser.m_group_names.size(); ++i_group) {
-      stream << "\n" << parser.m_group_names[i_group] << " (detailed usage):\n";
+      stream << "\n" << parser.m_group_names[i_group] << "\n";
       for (const auto &argument : parser.m_optional_arguments) {
         if (argument.m_group_idx == i_group + 1 && !argument.m_is_hidden) {
           stream.width(static_cast<std::streamsize>(longest_arg_length));
