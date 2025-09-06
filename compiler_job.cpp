@@ -13,7 +13,7 @@
 
 #include <magic_enum/magic_enum.hpp>
 
-#include "argparse/argparse.hpp"
+#include <argparse/argparse.hpp>
 
 #include "graphics/d3d12/d3d12_shader_compiler.h"
 
