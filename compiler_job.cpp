@@ -16,6 +16,7 @@
 #include <argparse/argparse.hpp>
 
 #include "graphics/d3d12/d3d12_shader_compiler.h"
+#include "qhenkiX/helper/d3d_helper.h"
 
 #include "qhenkiX/helper/file_helper.h"
 
@@ -148,7 +149,7 @@ int SXCJob::parse_config(const CLIInput& input, tbb::concurrent_vector<boost::co
 						const auto closing = d.find('}', opening);
 						if (closing == std::string::npos)
 						{
-							// The entire line will fail, which could cause multiple compiles to be missed.
+							// The entire line will fail which could cause multiple compiles to be missed
 							throw std::runtime_error("Missing '}' in define: " + d);
 						}
 
@@ -166,9 +167,9 @@ int SXCJob::parse_config(const CLIInput& input, tbb::concurrent_vector<boost::co
 							std::string new_config;
 							new_config.reserve(prefix_len + middle_len + suffix_len);
 
-							new_config.append(d, 0, prefix_len); // prefix
-							new_config.append(d, current, middle_len); // middle
-							new_config.append(d, closing + 1, suffix_len); // suffix
+							new_config.append(d, 0, prefix_len);
+							new_config.append(d, current, middle_len);
+							new_config.append(d, closing + 1, suffix_len);
 							// Continue expanding other {}
 							self(self, new_config);
 
@@ -262,13 +263,22 @@ fs::file_time_type get_most_recent_time(const fs::path& file, tsl::robin_set<fs:
 		std::smatch match;
 		if (std::regex_search(line, match, include_regex))
 		{
-			// TODO: Look in include paths
-
-			//const auto inc_time = get_most_recent_time(include_path, visited);
-			//if (inc_time > latest)
-			//{
-			//	latest = inc_time;
-			//}
+			// Look in include paths
+			fs::path include_file = file.parent_path() / match[1].str();
+			// Detect circular includes
+			if (visited.find(include_file) != visited.end())
+			{
+				printf("Circular include detected: %s\n", include_file.string().c_str());
+			}
+			else
+			{
+				// Recursively get times of includes
+				auto inc_time = get_most_recent_time(include_file, visited);
+				if (inc_time > latest)
+				{
+					latest = inc_time;
+				}
+			}
 		}
 	}
 	return latest;
@@ -280,6 +290,8 @@ bool needs_to_recompile_shader(const fs::path& input_path, const fs::path& outpu
 	{
 		return true;
 	}
+
+	// TODO: Need a hash based off defines or something. Otherwise, changes in config file do not trigger a recompilation.
 
 	tsl::robin_set<fs::path> visited;
 	const auto latest_input_time = get_most_recent_time(input_path, visited);
@@ -311,6 +323,7 @@ fs::path SXCJob::get_resolved_output_name(const OutputInfo& info, const fs::path
 
 	// TODO: flag for Vulkan/SPIRV
 
+	// TODO: If including multiple permutations, change file type to reflect that to differentiate between plain shaders
 	if (info.sm > gfx::ShaderModel::SM_5_0)
 	{
 		filename += ".dxil";
@@ -438,13 +451,30 @@ ShaderResultCount qhenki::sxc::execute_compilation_job(tbb::concurrent_vector<Co
 				output->emplace_back();
 				auto& out = output->back();
 				const auto success = compiler.compile(input, out);
-				if (success)
+
+				const auto tm = gfx::D3DHelper::get_shader_model_char(input.shader_type, input.shader_model);
+
+				if (input_vector->size() == 1)
 				{
-					printf("Permutation #%zu: Compiling shader: %s\n", i, input.get_path().data());
+					if (success)
+					{
+						printf("Compiling shader: %s %s\n", input.get_path().data(), tm.data());
+					}
+					else
+					{
+						printf("Compiling shader: %s %s\n%s", input.get_path().data(), tm.data(), out.error_message.data());
+					}
 				}
 				else
 				{
-					printf("Permutation #%zu: Compiling shader: %s\n%s", i, input.get_path().data(), out.error_message.data());
+					if (success)
+					{
+						printf("Permutation #%zu: Compiling shader: %s %s\n", i, input.get_path().data(), tm.data());
+					}
+					else
+					{
+						printf("Permutation #%zu: Compiling shader: %s %s\n%s", i, input.get_path().data(), tm.data(), out.error_message.data());
+					}
 				}
 			});
 

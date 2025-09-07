@@ -26,4 +26,13 @@ target_include_directories(SXC PRIVATE
 
 target_link_libraries(SXC PRIVATE QhenkiX)
 
-target_link_libraries(SXC PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/lib/tbb12.lib")
+target_link_libraries(SXC PRIVATE 
+    $<IF:$<CONFIG:Debug>,${CMAKE_CURRENT_SOURCE_DIR}/lib/tbb12_debug.lib,${CMAKE_CURRENT_SOURCE_DIR}/lib/tbb12.lib>
+)
+
+add_custom_command(TARGET SXC POST_BUILD
+    COMMAND ${CMAKE_COMMAND} -E copy_if_different
+        "$<$<CONFIG:Debug>:${CMAKE_CURRENT_SOURCE_DIR}/redist/tbb12_debug.dll>"
+        "$<$<NOT:$<CONFIG:Debug>>:${CMAKE_CURRENT_SOURCE_DIR}/redist/tbb12.dll>"
+        $<TARGET_FILE_DIR:SXC>
+)

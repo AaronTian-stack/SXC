@@ -32,6 +32,8 @@ SXC.exe -c <config_file> -sm <shader_model> -out <output_dir> [options]
 - `-dbg, --debug-flag`: Enable debug information for all shaders
 - `-o, --optimization`: Default optimization level (O0, O1, O2, O3) [default: O3]
 
+**Note**: Paths are resolved relative to the configuration file's directory location.
+
 ## Configuration File Format
 
 The configuration file contains one shader compilation job per line. Each line specifies the shader file and compilation parameters:
@@ -49,7 +51,7 @@ The configuration file contains one shader compilation job per line. Each line s
 - `-d, --define`: Preprocessor defines (supports permutation syntax)
 - `-o, --optimization`: Override global optimization level
 
-### Shader Permutations
+### Shader Permutations (In Progress)
 
 SXC supports generating multiple shader variants using define permutations:
 
@@ -62,6 +64,8 @@ This will generate 4 shader variants:
 - `FEATURE_A=0, FEATURE_B=1`
 - `FEATURE_A=1, FEATURE_B=0`
 - `FEATURE_A=1, FEATURE_B=1`
+
+However currently only the last permutation is written to disk. Soon I will add support for outputting permutations into a single binary file with a header for offset info.
 
 ## Example
 
@@ -82,8 +86,3 @@ SXC.exe -c shaders.config -sm 6_0 -out compiled_shaders -i include_dir -g GLOBAL
 - [QhenkiX](https://github.com/AaronTian-stack/QhenkiX) - MIT License
 - [Intel TBB](https://github.com/uxlfoundation/oneTBB) - Apache 2.0 License
 - DirectX Shader Compiler (DXC) or FXC
-
-## Roadmap / TODO
-
-- [ ] Finish incremental build support with dependency tracking
-- [ ] Merge permuations into single output

@@ -8,7 +8,7 @@
 int main(int argc, char* argv[])
 {
 	argparse::ArgumentParser program("SXC", "0.1.0");
-	program.add_description("FXC/DXC shader compiler.");
+	program.add_description("FXC/DXC batch shader compiler.");
 	program.set_prefix_chars("-+/");
 	program.set_assign_chars("=:");
 
@@ -65,32 +65,6 @@ int main(int argc, char* argv[])
 			.required();
 	}
 
-	//program
-	//	.add_argument("-e", "--entry-point")
-	//	.help("entry point function name")
-	//	.nargs(1)
-	//	.required();
-
-	//program
-	//	.add_argument("-d", "--define")
-	//	.append()
-	//	.help("defines in format of FOO=BAR");
-
-
-	//program
-	//	.add_argument("-st", "--shader-type")
-	//	.help("shader type")
-	//	.append()
-	//	.nargs(argparse::nargs_pattern::at_least_one)
-	//	.required();
-
-	//program
-	//	.add_argument("-o", "--optimization")
-	//	.default_value("O3")
-	//	.choices("O0", "O1", "O2", "O3")
-	//	.nargs(1)
-	//	.help("optimization level");
-
 	try
 	{
 		program.parse_args(argc, argv);
@@ -99,6 +73,13 @@ int main(int argc, char* argv[])
 		if (!std::filesystem::exists(config_file_path))
 		{
 			throw std::runtime_error("Config file does not exist: " + program.get<std::string>("--config-path"));
+		}
+
+		// Set working directory to config file location
+		const auto config_dir = std::filesystem::path(config_file_path).parent_path();
+		if (!config_dir.empty())
+		{
+			std::filesystem::current_path(config_dir);
 		}
 
 		const auto pdb = program.present<std::string>("--pdb-path");
