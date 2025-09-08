@@ -60,7 +60,7 @@ namespace qhenki::sxc
 
 	public:
 
-		static fs::path get_resolved_output_name(const OutputInfo& info, const fs::path& input_path, const std::string& output_dir);
+		static fs::path get_resolved_output_name(const OutputInfo& info, const fs::path& input_path, const std::string& output_dir, size_t permutation_count);
 		static int parse_config(const CLIInput& input, tbb::concurrent_vector<CompilerInputVector>* compiler_inputs);
 	};
 

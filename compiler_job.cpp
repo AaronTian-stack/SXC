@@ -6,7 +6,6 @@
 #include <tbb/parallel_pipeline.h>
 #include <tbb/parallel_for_each.h>
 #include <tsl/robin_set.h>
-#include <iostream>
 #include <filesystem>
 #include <fstream>
 #include <regex>
@@ -65,7 +64,7 @@ int SXCJob::parse_config(const CLIInput& input, tbb::concurrent_vector<boost::co
 	std::ifstream config_file(input.config_path);
 	if (!config_file.is_open()) 
 	{
-		std::cerr << "Failed to open config file: " << input.config_path << '\n';
+		fprintf(stderr, "Failed to open config file: %s\n", input.config_path.c_str());
 		return -1;
 	}
 
@@ -232,7 +231,7 @@ int SXCJob::parse_config(const CLIInput& input, tbb::concurrent_vector<boost::co
 
 	for (const auto& error : parse_errors)
 	{
-		std::cerr << "Failed to parse config line: " << error.first << "\n\t" << error.second << '\n';
+		fprintf(stderr, "Failed to parse config line: %d\n\t%s\n", error.first, error.second.c_str());
 	}
 	return parse_errors.empty() ? 0 : -1;
 }
@@ -303,7 +302,7 @@ bool needs_to_recompile_shader(const fs::path& input_path, const fs::path& outpu
 	return false;
 }
 
-fs::path SXCJob::get_resolved_output_name(const OutputInfo& info, const fs::path& input_path, const std::string& output_dir)
+fs::path SXCJob::get_resolved_output_name(const OutputInfo& info, const fs::path& input_path, const std::string& output_dir, const size_t permutation_count)
 {
 	// Appends something like _vs_5_0_main.dxil
 	fs::path filename = input_path.filename();
@@ -331,6 +330,10 @@ fs::path SXCJob::get_resolved_output_name(const OutputInfo& info, const fs::path
 	else
 	{
 		filename += ".dxbc";
+	}
+	if (permutation_count > 1)
+	{
+		filename += "p";
 	}
 
 	return fs::path(output_dir) / filename;
@@ -389,7 +392,7 @@ ShaderResultCount qhenki::sxc::execute_compilation_job(tbb::concurrent_vector<Co
 				.entry_point = ci.entry_point,
 			};
 			fs::path input_path = ci.get_path();
-			fs::path output_path = SXCJob::get_resolved_output_name(info, input_path, output_dir);
+			fs::path output_path = SXCJob::get_resolved_output_name(info, input_path, output_dir, input->size());
 
 			if (needs_to_recompile_shader(input_path, output_path))
 			{
@@ -454,27 +457,13 @@ ShaderResultCount qhenki::sxc::execute_compilation_job(tbb::concurrent_vector<Co
 
 				const auto tm = gfx::D3DHelper::get_shader_model_char(input.shader_type, input.shader_model);
 
-				if (input_vector->size() == 1)
+				if (success)
 				{
-					if (success)
-					{
-						printf("Compiling shader: %s %s\n", input.get_path().data(), tm.data());
-					}
-					else
-					{
-						printf("Compiling shader: %s %s\n%s", input.get_path().data(), tm.data(), out.error_message.data());
-					}
+					printf("Permutation #%zu: Compiling shader: %s %s\n", i, input.get_path().data(), tm.data());
 				}
 				else
 				{
-					if (success)
-					{
-						printf("Permutation #%zu: Compiling shader: %s %s\n", i, input.get_path().data(), tm.data());
-					}
-					else
-					{
-						printf("Permutation #%zu: Compiling shader: %s %s\n%s", i, input.get_path().data(), tm.data(), out.error_message.data());
-					}
+					printf("Permutation #%zu: Compiling shader: %s %s\n%s", i, input.get_path().data(), tm.data(), out.error_message.data());
 				}
 			});
 

@@ -1,9 +1,9 @@
-#include <iostream>
 #include <argparse/argparse.hpp>
 #include <qhenkiX/RHI/shader_compiler.h>
 #include <magic_enum/magic_enum.hpp>
 #include <filesystem>
 #include "compiler_job.h"
+#include "graphics/d3d12/d3d12_shader_compiler.h"
 
 int main(int argc, char* argv[])
 {
@@ -147,32 +147,34 @@ int main(int argc, char* argv[])
 		const auto num_lines = qhenki::sxc::SXCJob::parse_config(input, &inputs);
 		if (num_lines < 0)
 		{
-			std::cerr << "Failed to parse config file: " << input.config_path << '\n';
+			fprintf(stderr, "Failed to parse config file: %s\n", input.config_path.c_str());
 			return 1;
 		}
+
+		constexpr auto buffer_length = 512;
+		std::array<char, buffer_length> buffer1, buffer2;
+		qhenki::gfx::D3D12ShaderCompiler::get_dll_path(buffer1.data(), buffer2.data(), buffer_length);
+		printf("Using shader compiler DLLs:\nFXC: %s\nDXC: %s\n", buffer1.data(), buffer2.data());
 
 		const auto result_count = qhenki::sxc::execute_compilation_job(&inputs, input.output_dir);
 
 		const auto end = std::chrono::steady_clock::now();
 
-		std::cout << "========== Build: "
-			  << result_count.succeeded_count	<< " succeeded, "
-			  << result_count.failed_count		<< " failed, "
-			  << result_count.skipped_count		<< " up-to-date ==========\n";
+		printf("========== Build: %llu succeeded, %llu failed, %llu up-to-date ==========\n",
+			   result_count.succeeded_count, result_count.failed_count, result_count.skipped_count);
 
 		// Print duration in seconds with milliseconds
 		auto ms = std::chrono::duration_cast<std::chrono::milliseconds>(end - start).count();
 		double seconds = ms / 1000.0;
 
-		std::cout << "========== Build completed and took " << std::fixed << std::setprecision(3)
-			  << seconds << " seconds ==========\n";
+		printf("========== Build completed and took %.3f seconds ==========\n", seconds);
 
 		return 0;
 	}
 	catch (const std::exception& err)
 	{
-		std::cerr << err.what() << '\n';
-		std::cerr << program;
+		fprintf(stderr, "%s\n", err.what());
+		fprintf(stderr, "%s", program.help().str().c_str());
 		return 1;
 	}
 }
