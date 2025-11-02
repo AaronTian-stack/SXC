@@ -8,6 +8,7 @@ SXC (Shader eXecution Compiler) is a command line tool for batch compilation of 
 - **Parallel Processing**: Uses Intel TBB for efficient multi-threaded compilation
 - **Shader Permutations**: Support for generating multiple variants with different defines
 - **Multiple Shader Models**: Support for SM 5.0 through 6.6
+- **DXIL Library (RT)**: Compile shader libraries for DXR
 - **Debug Support**: Optional debug information generation
 
 ## Basic Usage
@@ -39,14 +40,14 @@ SXC.exe -c <config_file> -sm <shader_model> -out <output_dir> [options]
 The configuration file contains one shader compilation job per line. Each line specifies the shader file and compilation parameters:
 
 ```
--p <shader_path> -e <entry_point> -st <shader_type> [options]
+-p <shader_path> -st <shader_type> [-e <entry_point>] [options]
 ```
 
 ### Configuration Parameters
 
 - `-p, --path`: Path to the HLSL shader file
-- `-e, --entry-point`: Shader entry point function name
-- `-st, --shader-type`: Shader type (`vs` for vertex, `ps` for pixel, `cs` for compute)
+- `-e, --entry-point`: Shader entry point function name (optional for `lib`)
+- `-st, --shader-type`: Shader type (`vs` for vertex, `ps` for pixel, `cs` for compute, `lib` for DXIL library)
 - `-out, --output-dir`: Override global output directory for this shader
 - `-d, --define`: Preprocessor defines (supports permutation syntax)
 - `-o, --optimization`: Override global optimization level

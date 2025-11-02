@@ -9,6 +9,7 @@
 #include <filesystem>
 #include <fstream>
 #include <regex>
+#include <cstring>
 
 #include <magic_enum/magic_enum.hpp>
 
@@ -23,24 +24,17 @@ using namespace qhenki::sxc;
 
 qhenki::gfx::ShaderType SXCJob::to_shader_type(const char* str)
 {
-	assert(strlen(str) == 2);
+	// Support traditional stages and DXIL library (lib)
+	if (strcmp(str, "vs") == 0)
+		return gfx::ShaderType::VERTEX_SHADER;
+	if (strcmp(str, "ps") == 0)
+		return gfx::ShaderType::PIXEL_SHADER;
+	if (strcmp(str, "cs") == 0)
+		return gfx::ShaderType::COMPUTE_SHADER;
+	if (strcmp(str, "lib") == 0 || strcmp(str, "library") == 0)
+		return gfx::ShaderType::LIBRARY_SHADER;
 
-	auto hash = [](const char* s)->uint32_t
-	{
-		return s[0] << 16 | s[1] << 8 | s[2];
-	};
-
-	switch (hash(str))
-	{
-		case hash("vs"):
-			return gfx::ShaderType::VERTEX_SHADER;
-		case hash("ps"):
-			return gfx::ShaderType::PIXEL_SHADER;
-		case hash("cs"):
-			return gfx::ShaderType::COMPUTE_SHADER;
-		default:
-			throw std::runtime_error("Unknown shader type: " + std::string(str));
-	}
+	throw std::runtime_error("Unknown shader type: " + std::string(str));
 }
 
 const char* SXCJob::shader_type_to_str(gfx::ShaderType type)
@@ -53,6 +47,8 @@ const char* SXCJob::shader_type_to_str(gfx::ShaderType type)
 			return "_ps_";
 		case gfx::ShaderType::COMPUTE_SHADER:
 			return "_cs_";
+		case gfx::ShaderType::LIBRARY_SHADER:
+			return "_lib_";
 		default:
 			throw std::runtime_error("Unknown shader type");
 	}
@@ -109,8 +105,7 @@ int SXCJob::parse_config(const CLIInput& input, tbb::concurrent_vector<boost::co
 				.nargs(1);
 			program.add_argument("-e", "--entry-point")
 				.store_into(compiler_input.entry_point) // Store entry point directly
-				.nargs(1)
-				.required();
+				.nargs(1);
 			program.add_argument("-d", "--define")
 				.default_value(std::vector<std::string>{})
 				.append();
@@ -126,6 +121,13 @@ int SXCJob::parse_config(const CLIInput& input, tbb::concurrent_vector<boost::co
 				program.parse_args(arg);
 
 				compiler_input.shader_type = to_shader_type(program.get<std::string>("--shader-type").c_str());
+
+				// Enforce entry-point for non-library shaders
+				const auto ep_present = program.present<std::string>("--entry-point");
+				if (compiler_input.shader_type != gfx::ShaderType::LIBRARY_SHADER && !ep_present.has_value())
+				{
+					throw std::runtime_error("-e: required.");
+				}
 
 				// Could be {1,2,3} format
 				// Strings may get moved out so invalid after expand_defines routine
@@ -317,8 +319,12 @@ fs::path SXCJob::get_resolved_output_name(const OutputInfo& info, const fs::path
 	assert(!sm.empty());
 
 	filename += sm.substr(sm.find('_') + 1);
-	filename += "_";
-	filename += info.entry_point;
+	// For DXIL libraries, skip appending an entry point name
+	if (info.st != gfx::ShaderType::LIBRARY_SHADER)
+	{
+		filename += "_";
+		filename += info.entry_point;
+	}
 
 	// TODO: flag for Vulkan/SPIRV
 

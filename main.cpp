@@ -154,7 +154,7 @@ int main(int argc, char* argv[])
 		constexpr auto buffer_length = 512;
 		std::array<char, buffer_length> buffer1, buffer2;
 		qhenki::gfx::D3D12ShaderCompiler::get_dll_path(buffer1.data(), buffer2.data(), buffer_length);
-		printf("Using shader compiler DLLs:\nFXC: %s\nDXC: %s\n", buffer1.data(), buffer2.data());
+		printf("Using shader compiler DLLs:\nDXC: %s\nFXC: %s\n", buffer1.data(), buffer2.data());
 
 		const auto result_count = qhenki::sxc::execute_compilation_job(&inputs, input.output_dir);
 
