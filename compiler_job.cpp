@@ -238,7 +238,7 @@ int SXCJob::parse_config(const CLIInput& input, tbb::concurrent_vector<boost::co
 	return parse_errors.empty() ? 0 : -1;
 }
 
-fs::file_time_type get_most_recent_time(const fs::path& file, tsl::robin_set<fs::path>& visited)
+fs::file_time_type get_most_recent_time(const fs::path& file, tsl::robin_set<fs::path>& visited, std::span<const std::string> include_paths)
 {
 	if (!fs::exists(file))
 	{
@@ -266,6 +266,21 @@ fs::file_time_type get_most_recent_time(const fs::path& file, tsl::robin_set<fs:
 		{
 			// Look in include paths
 			fs::path include_file = file.parent_path() / match[1].str();
+			
+			// If not found relative to parent, search in include paths
+			if (!fs::exists(include_file))
+			{
+				for (const auto& include_path : include_paths)
+				{
+					fs::path candidate = fs::path(include_path) / match[1].str();
+					if (fs::exists(candidate))
+					{
+						include_file = candidate;
+						break;
+					}
+				}
+			}
+			
 			// Detect circular includes
 			if (visited.find(include_file) != visited.end())
 			{
@@ -274,7 +289,7 @@ fs::file_time_type get_most_recent_time(const fs::path& file, tsl::robin_set<fs:
 			else
 			{
 				// Recursively get times of includes
-				auto inc_time = get_most_recent_time(include_file, visited);
+				auto inc_time = get_most_recent_time(include_file, visited, include_paths);
 				if (inc_time > latest)
 				{
 					latest = inc_time;
@@ -285,7 +300,7 @@ fs::file_time_type get_most_recent_time(const fs::path& file, tsl::robin_set<fs:
 	return latest;
 }
 
-bool needs_to_recompile_shader(const fs::path& input_path, const fs::path& output_path)
+bool needs_to_recompile_shader(const fs::path& input_path, const fs::path& output_path, std::span<const std::string> include_paths)
 {
 	if (!fs::exists(output_path))
 	{
@@ -295,7 +310,7 @@ bool needs_to_recompile_shader(const fs::path& input_path, const fs::path& outpu
 	// TODO: Need a hash based off defines or something. Otherwise, changes in config file do not trigger a recompilation.
 
 	tsl::robin_set<fs::path> visited;
-	const auto latest_input_time = get_most_recent_time(input_path, visited);
+	const auto latest_input_time = get_most_recent_time(input_path, visited, include_paths);
 	const auto output_time = fs::last_write_time(output_path);
 
 	if (latest_input_time > output_time)
@@ -400,7 +415,7 @@ ShaderResultCount qhenki::sxc::execute_compilation_job(tbb::concurrent_vector<Co
 			fs::path input_path = ci.get_path();
 			fs::path output_path = SXCJob::get_resolved_output_name(info, input_path, output_dir, input->size());
 
-			if (needs_to_recompile_shader(input_path, output_path))
+			if (needs_to_recompile_shader(input_path, output_path, ci.includes))
 			{
 				return
 				{
