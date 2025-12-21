@@ -21,7 +21,7 @@ endif()
 target_include_directories(SXC PRIVATE
     "${CMAKE_CURRENT_SOURCE_DIR}/include"
     "${REPO_ROOT}/QhenkiX/include"
-    "${REPO_ROOT}/QhenkiX/qhenkiX"
+    "${REPO_ROOT}/QhenkiX/qhenki"
 )
 
 target_link_libraries(SXC PRIVATE QhenkiX)

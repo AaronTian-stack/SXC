@@ -16,9 +16,9 @@
 #include <argparse/argparse.hpp>
 
 #include "graphics/d3d12/d3d12_shader_compiler.h"
-#include "qhenkiX/helper/d3d_helper.h"
+#include "qhenki/helper/d3d_helper.h"
 
-#include "qhenkiX/helper/file_helper.h"
+#include "qhenki/helper/file_helper.h"
 
 using namespace qhenki::sxc;
 
