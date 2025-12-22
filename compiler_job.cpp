@@ -15,7 +15,7 @@
 #include <argparse/argparse.hpp>
 
 #include "graphics/d3d12/d3d12_shader_compiler.h"
-#include "qhenki/helper/d3d_helper.h"
+#include "helper/d3d_helper.h"
 
 #include "qhenki/helper/file_helper.h"
 
@@ -457,31 +457,33 @@ ShaderResultCount qhenki::sxc::execute_compilation_job(tbb::concurrent_vector<Co
                 output->reserve(input_vector->size());
             }
 
-            tbb::parallel_for(
-                static_cast<size_t>(0),
-                input_vector->size(),
-                [&](size_t i)
-                {
-                    auto& input = (*input_vector)[i];
-                    output->emplace_back();
-                    auto& out = output->back();
-                    const auto success = compiler.compile(input, out);
+            tbb::parallel_for(static_cast<size_t>(0),
+                              input_vector->size(),
+                              [&](size_t i)
+                              {
+                                  auto& input = (*input_vector)[i];
+                                  output->emplace_back();
+                                  auto& out = output->back();
+                                  const auto success = compiler.compile(input, out);
 
-                    const auto tm = gfx::D3DHelper::get_shader_model_char(input.shader_type, input.shader_model);
+                                  const auto tm = gfx::get_shader_model_char(input.shader_type, input.shader_model);
 
-                    if (success)
-                    {
-                        printf("Permutation #%zu: Compiling shader: %s %s\n", i, input.get_path().data(), tm.data());
-                    }
-                    else
-                    {
-                        printf("Permutation #%zu: Compiling shader: %s %s\n%s",
-                               i,
-                               input.get_path().data(),
-                               tm.data(),
-                               out.error_message.data());
-                    }
-                });
+                                  if (success)
+                                  {
+                                      printf("Permutation #%zu: Compiling shader: %s %s\n",
+                                             i,
+                                             input.get_path().data(),
+                                             tm.data());
+                                  }
+                                  else
+                                  {
+                                      printf("Permutation #%zu: Compiling shader: %s %s\n%s",
+                                             i,
+                                             input.get_path().data(),
+                                             tm.data(),
+                                             out.error_message.data());
+                                  }
+                              });
 
             return {.path = out_path, .output = output};
         });
@@ -508,7 +510,7 @@ ShaderResultCount qhenki::sxc::execute_compilation_job(tbb::concurrent_vector<Co
                         // TODO: permutations of the same shader need to be written to the same file
                         // Needs to be a header with offsets
 
-                        if (!util::FileHelper::write_file(pa.path.c_str(), co.shader_data, co.shader_size))
+                        if (!util::write_file(pa.path.c_str(), co.shader_data, co.shader_size))
                         {
                             printf("Failed to write shader to file: %s\n", pa.path.string().c_str());
                             ++failed_count;
