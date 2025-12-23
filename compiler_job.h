@@ -1,6 +1,5 @@
 #pragma once
 
-#include <basetsd.h>
 #include <filesystem>
 #include <optional>
 #include <string>

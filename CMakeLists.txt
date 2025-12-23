@@ -19,20 +19,21 @@ if(MSVC)
 endif()
 
 target_include_directories(SXC PRIVATE
-    "${CMAKE_CURRENT_SOURCE_DIR}/include"
     "${REPO_ROOT}/QhenkiX/include"
     "${REPO_ROOT}/QhenkiX/qhenki"
+    "${CMAKE_CURRENT_SOURCE_DIR}/external/"
+    "${CMAKE_CURRENT_SOURCE_DIR}/external/tbb/include"
 )
 
 target_link_libraries(SXC PRIVATE QhenkiX)
 
 target_link_libraries(SXC PRIVATE 
-    $<IF:$<CONFIG:Debug>,${CMAKE_CURRENT_SOURCE_DIR}/lib/tbb12_debug.lib,${CMAKE_CURRENT_SOURCE_DIR}/lib/tbb12.lib>
+    $<IF:$<CONFIG:Debug>,${CMAKE_CURRENT_SOURCE_DIR}/external/tbb/lib/tbb12_debug.lib,${CMAKE_CURRENT_SOURCE_DIR}/external/tbb/lib/tbb12.lib>
 )
 
 add_custom_command(TARGET SXC POST_BUILD
     COMMAND ${CMAKE_COMMAND} -E copy_if_different
-        "$<$<CONFIG:Debug>:${CMAKE_CURRENT_SOURCE_DIR}/redist/tbb12_debug.dll>"
-        "$<$<NOT:$<CONFIG:Debug>>:${CMAKE_CURRENT_SOURCE_DIR}/redist/tbb12.dll>"
+        "$<$<CONFIG:Debug>:${CMAKE_CURRENT_SOURCE_DIR}/external/tbb/bin/tbb12_debug.dll>"
+        "$<$<NOT:$<CONFIG:Debug>>:${CMAKE_CURRENT_SOURCE_DIR}/external/tbb/bin/tbb12.dll>"
         $<TARGET_FILE_DIR:SXC>
 )

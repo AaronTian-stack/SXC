@@ -52,7 +52,7 @@ The configuration file contains one shader compilation job per line. Each line s
 - `-d, --define`: Preprocessor defines (supports permutation syntax)
 - `-o, --optimization`: Override global optimization level
 
-### Shader Permutations (In Progress)
+### Shader Permutations
 
 SXC supports generating multiple shader variants using define permutations:
 
@@ -66,7 +66,7 @@ This will generate 4 shader variants:
 - `FEATURE_A=1, FEATURE_B=0`
 - `FEATURE_A=1, FEATURE_B=1`
 
-However currently only the last permutation is written to disk. Soon I will add support for outputting permutations into a single binary file with a header for offset info.
+All shader permutations are compiled and written to a single binary file. To read specific permutations at runtime, use the `find_permutation_in_blob()` function from `qhenki/utility/shader_blob.h`. This function allows you to query a permutation by its defines and returns a pointer to the compiled shader bytecode. `shader_blob.h` is part of QhenkiX but can be used as a standalone header, so if you wish to only use SXC you can just copy the file into your project.
 
 ## Example
 

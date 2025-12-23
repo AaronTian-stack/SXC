@@ -8,7 +8,9 @@
 #include <tsl/robin_set.h>
 #include <filesystem>
 #include <fstream>
+#include <functional>
 #include <regex>
+#include <sstream>
 
 #include <magic_enum/magic_enum.hpp>
 
@@ -18,25 +20,262 @@
 #include "utility/d3d_util.h"
 
 #include "qhenki/utility/file_util.h"
+#include "qhenki/utility/shader_blob.h"
+
 
 using namespace qhenki::sxc;
+using namespace qhenki::util;
+
+namespace
+{
+std::string compute_defines_hash(const CompilerInputVector& inputs)
+{
+    constexpr std::hash<std::string> hasher;
+    size_t combined_hash = 0;
+
+    for (const auto& input : inputs)
+    {
+        const auto defines = input.get_defines();
+        for (const auto& define : defines)
+        {
+            // Boost hash combine
+            combined_hash ^= hasher(define) + 0x9e3779b9 + (combined_hash << 6) + (combined_hash >> 2);
+        }
+    }
+
+    // Convert to hex string
+    std::ostringstream oss;
+    oss << std::hex << combined_hash;
+    return oss.str();
+}
+
+bool write_meta_file(const fs::path& meta_path, const std::string& defines_hash)
+{
+    std::ofstream out(meta_path);
+    if (!out.is_open())
+    {
+        return false;
+    }
+    out << defines_hash;
+    return out.good();
+}
+
+bool check_meta_file(const fs::path& meta_path, const std::string& expected_hash)
+{
+    if (!fs::exists(meta_path))
+    {
+        return false;
+    }
+
+    std::ifstream in(meta_path);
+    if (!in.is_open())
+    {
+        return false;
+    }
+
+    std::string stored_hash;
+    if (!std::getline(in, stored_hash))
+    {
+        return false;
+    }
+
+    return stored_hash == expected_hash;
+}
+
+fs::file_time_type get_most_recent_time(const fs::path& file,
+                                        tsl::robin_set<fs::path>& visited,
+                                        std::span<const std::string> include_paths)
+{
+    if (!fs::exists(file))
+    {
+        printf("Include file not found: %s\n", file.string().c_str());
+        return fs::file_time_type::min();
+    }
+
+    if (!visited.insert(file).second)
+    {
+        return fs::file_time_type::min(); // Already visited this file
+    }
+
+    std::ifstream in(file);
+    if (!in.is_open())
+        return fs::file_time_type::min();
+
+    fs::file_time_type latest = fs::last_write_time(file); // This can technically throw an exception
+
+    std::string line;
+    std::regex include_regex(R"(^\s*#\s*include\s*["<](.*)[">])");
+    while (std::getline(in, line))
+    {
+        std::smatch match;
+        if (std::regex_search(line, match, include_regex))
+        {
+            // Look in include paths
+            fs::path include_file = file.parent_path() / match[1].str();
+
+            // If not found relative to parent, search in include paths
+            if (!fs::exists(include_file))
+            {
+                for (const auto& include_path : include_paths)
+                {
+                    fs::path candidate = fs::path(include_path) / match[1].str();
+                    if (fs::exists(candidate))
+                    {
+                        include_file = candidate;
+                        break;
+                    }
+                }
+            }
+
+            // Detect circular includes
+            if (visited.find(include_file) != visited.end())
+            {
+                printf("Circular include detected: %s\n", include_file.string().c_str());
+            }
+            else
+            {
+                // Recursively get times of includes
+                auto inc_time = get_most_recent_time(include_file, visited, include_paths);
+                if (inc_time > latest)
+                {
+                    latest = inc_time;
+                }
+            }
+        }
+    }
+    return latest;
+}
+
+bool needs_to_recompile_shader(const fs::path& input_path,
+                               const fs::path& output_path,
+                               const std::span<const std::string> include_paths,
+                               const CompilerInputVector& inputs)
+{
+    if (!fs::exists(output_path))
+    {
+        return true;
+    }
+
+    // Check meta file for permutated shaders
+    if (inputs.size() > 1)
+    {
+        fs::path meta_path = output_path.parent_path() / input_path.stem();
+        meta_path += ".meta";
+
+        const auto defines_hash = compute_defines_hash(inputs);
+        if (!check_meta_file(meta_path, defines_hash))
+        {
+            return true; // Missing or hash mismatch
+        }
+    }
+
+    tsl::robin_set<fs::path> visited;
+    const auto latest_input_time = get_most_recent_time(input_path, visited, include_paths);
+    const auto output_time = fs::last_write_time(output_path);
+
+    if (latest_input_time > output_time)
+        return true;
+
+    return false;
+}
+
+bool write_shader_blob(const fs::path& output_path,
+                       const tbb::concurrent_vector<CompilerOutput>& outputs,
+                       const CompilerInputVector& inputs)
+{
+    std::ofstream out(output_path, std::ios::binary);
+    if (!out.is_open())
+    {
+        return false;
+    }
+
+    const ShaderBlobHeader header{
+        .magic = SHADER_BLOB_MAGIC,
+        .version = SHADER_BLOB_VERSION,
+        .shader_count = outputs.size(),
+    };
+    out.write(reinterpret_cast<const char*>(&header), sizeof(header));
+
+    uint64_t current_offset = sizeof(ShaderBlobHeader);
+
+    for (size_t i = 0; i < outputs.size(); i++)
+    {
+        current_offset += sizeof(ShaderBlobEntry);
+
+        const auto defines = inputs[i].get_defines();
+        for (const auto& def : defines)
+        {
+            current_offset += def.size() + 1; // Include null terminator
+        }
+    }
+
+    auto data_offset = current_offset;
+
+    for (size_t i = 0; i < outputs.size(); i++)
+    {
+        const auto& co = outputs[i];
+        const auto defines = inputs[i].get_defines();
+
+        ShaderBlobEntry entry{
+            .offset = data_offset,
+            .size = co.shader_size,
+            .define_count = static_cast<uint32_t>(defines.size()),
+        };
+        out.write(reinterpret_cast<const char*>(&entry), sizeof(entry));
+
+        for (const auto& def : defines)
+        {
+            assert(def.size() + 1 <= std::numeric_limits<long long>::max());
+            out.write(def.c_str(), def.size() + 1); // Include null terminator
+        }
+
+        data_offset += co.shader_size;
+    }
+
+    for (const auto& co : outputs)
+    {
+        assert(co.shader_size <= std::numeric_limits<long long>::max());
+        out.write(static_cast<const char*>(co.shader_data), co.shader_size);
+    }
+
+    if (!out.good())
+    {
+        return false;
+    }
+
+    // Write meta file containing the defines hash
+    const fs::path input_path = inputs[0].get_path();
+    fs::path meta_path = output_path.parent_path() / input_path.stem();
+    meta_path += ".meta";
+    const auto defines_hash = compute_defines_hash(inputs);
+    return write_meta_file(meta_path, defines_hash);
+}
+
+} // namespace
 
 qhenki::gfx::ShaderType SXCJob::to_shader_type(const char* str)
 {
     // Support traditional stages and DXIL library (lib)
     if (strcmp(str, "vs") == 0)
+    {
         return gfx::ShaderType::VERTEX_SHADER;
+    }
     if (strcmp(str, "ps") == 0)
+    {
         return gfx::ShaderType::PIXEL_SHADER;
+    }
     if (strcmp(str, "cs") == 0)
+    {
         return gfx::ShaderType::COMPUTE_SHADER;
+    }
     if (strcmp(str, "lib") == 0 || strcmp(str, "library") == 0)
+    {
         return gfx::ShaderType::LIBRARY_SHADER;
-
-    throw std::runtime_error("Unknown shader type: " + std::string(str));
+    }
+    throw std::runtime_error("Unknown shader type");
 }
 
-const char* SXCJob::shader_type_to_str(gfx::ShaderType type)
+const char* SXCJob::shader_type_to_str(const gfx::ShaderType type)
 {
     switch (type)
     {
@@ -152,8 +391,9 @@ int SXCJob::parse_config(const CLIInput& input,
                     {
                         size_t comma = d.find(',', current);
                         if (comma == std::string::npos || comma > closing)
+                        {
                             comma = closing;
-
+                        }
                         // Precompute the size for the new string to minimize allocations
                         const size_t prefix_len = opening;
                         const size_t middle_len = comma - current;
@@ -169,7 +409,9 @@ int SXCJob::parse_config(const CLIInput& input,
 
                         current = comma + 1;
                         if (comma >= closing)
+                        {
                             break;
+                        }
                     }
                 };
 
@@ -228,92 +470,6 @@ int SXCJob::parse_config(const CLIInput& input,
     return parse_errors.empty() ? 0 : -1;
 }
 
-fs::file_time_type get_most_recent_time(const fs::path& file,
-                                        tsl::robin_set<fs::path>& visited,
-                                        std::span<const std::string> include_paths)
-{
-    if (!fs::exists(file))
-    {
-        printf("Include file not found: %s\n", file.string().c_str());
-        return fs::file_time_type::min();
-    }
-
-    if (!visited.insert(file).second)
-    {
-        return fs::file_time_type::min(); // Already visited this file
-    }
-
-    std::ifstream in(file);
-    if (!in.is_open())
-        return fs::file_time_type::min();
-
-    fs::file_time_type latest = fs::last_write_time(file); // This can technically throw an exception
-
-    std::string line;
-    std::regex include_regex(R"(^\s*#\s*include\s*["<](.*)[">])");
-    while (std::getline(in, line))
-    {
-        std::smatch match;
-        if (std::regex_search(line, match, include_regex))
-        {
-            // Look in include paths
-            fs::path include_file = file.parent_path() / match[1].str();
-
-            // If not found relative to parent, search in include paths
-            if (!fs::exists(include_file))
-            {
-                for (const auto& include_path : include_paths)
-                {
-                    fs::path candidate = fs::path(include_path) / match[1].str();
-                    if (fs::exists(candidate))
-                    {
-                        include_file = candidate;
-                        break;
-                    }
-                }
-            }
-
-            // Detect circular includes
-            if (visited.find(include_file) != visited.end())
-            {
-                printf("Circular include detected: %s\n", include_file.string().c_str());
-            }
-            else
-            {
-                // Recursively get times of includes
-                auto inc_time = get_most_recent_time(include_file, visited, include_paths);
-                if (inc_time > latest)
-                {
-                    latest = inc_time;
-                }
-            }
-        }
-    }
-    return latest;
-}
-
-bool needs_to_recompile_shader(const fs::path& input_path,
-                               const fs::path& output_path,
-                               std::span<const std::string> include_paths)
-{
-    if (!fs::exists(output_path))
-    {
-        return true;
-    }
-
-    // TODO: Need a hash based off defines or something. Otherwise, changes in config file do not trigger a
-    // recompilation.
-
-    tsl::robin_set<fs::path> visited;
-    const auto latest_input_time = get_most_recent_time(input_path, visited, include_paths);
-    const auto output_time = fs::last_write_time(output_path);
-
-    if (latest_input_time > output_time)
-        return true;
-
-    return false;
-}
-
 fs::path SXCJob::get_resolved_output_name(const OutputInfo& info,
                                           const fs::path& input_path,
                                           const std::string& output_dir,
@@ -341,18 +497,27 @@ fs::path SXCJob::get_resolved_output_name(const OutputInfo& info,
 
     // TODO: flag for Vulkan/SPIRV
 
-    // TODO: If including multiple permutations, change file type to reflect that to differentiate between plain shaders
-    if (info.sm > gfx::ShaderModel::SM_5_0)
+    if (permutation_count > 1)
     {
-        filename += ".dxil";
+        if (info.sm > gfx::ShaderModel::SM_5_0)
+        {
+            filename += ".dxil_blob";
+        }
+        else
+        {
+            filename += ".dxbc_blob";
+        }
     }
     else
     {
-        filename += ".dxbc";
-    }
-    if (permutation_count > 1)
-    {
-        filename += "p";
+        if (info.sm > gfx::ShaderModel::SM_5_0)
+        {
+            filename += ".dxil";
+        }
+        else
+        {
+            filename += ".dxbc";
+        }
     }
 
     return fs::path(output_dir) / filename;
@@ -409,10 +574,10 @@ ShaderResultCount qhenki::sxc::execute_compilation_job(tbb::concurrent_vector<Co
                 .st = ci.shader_type,
                 .entry_point = ci.entry_point,
             };
-            fs::path input_path = ci.get_path();
-            fs::path output_path = SXCJob::get_resolved_output_name(info, input_path, output_dir, input->size());
+            const fs::path input_path = ci.get_path();
+            const fs::path output_path = SXCJob::get_resolved_output_name(info, input_path, output_dir, input->size());
 
-            if (needs_to_recompile_shader(input_path, output_path, ci.includes))
+            if (needs_to_recompile_shader(input_path, output_path, ci.includes, *input))
             {
                 return {.output_path = output_path, .input_vector = input};
             }
@@ -428,6 +593,7 @@ ShaderResultCount qhenki::sxc::execute_compilation_job(tbb::concurrent_vector<Co
     {
         fs::path path;
         CompilerOutputVector* output;
+        CompilerInputVector* input_vector;
     };
 
     tbb::enumerable_thread_specific<gfx::D3D12ShaderCompiler> compilers;
@@ -441,7 +607,7 @@ ShaderResultCount qhenki::sxc::execute_compilation_job(tbb::concurrent_vector<Co
 
             if (!input_vector)
             {
-                return {.path = "", .output = nullptr};
+                return {.path = "", .output = nullptr, .input_vector = nullptr};
             }
 
             auto& compiler = compilers.local();
@@ -449,7 +615,7 @@ ShaderResultCount qhenki::sxc::execute_compilation_job(tbb::concurrent_vector<Co
             using allocator = oneapi::tbb::tbb_allocator<CompilerOutputVector>;
 
             allocator alloc;
-            auto output = alloc.allocate(1);
+            const auto output = alloc.allocate(1);
             std::allocator_traits<allocator>::construct(alloc, output);
 
             if (input_vector->size() > 1)
@@ -461,7 +627,7 @@ ShaderResultCount qhenki::sxc::execute_compilation_job(tbb::concurrent_vector<Co
                               input_vector->size(),
                               [&](size_t i)
                               {
-                                  auto& input = (*input_vector)[i];
+                                  const auto& input = (*input_vector)[i];
                                   output->emplace_back();
                                   auto& out = output->back();
                                   const auto success = compiler.compile(input, out);
@@ -485,7 +651,7 @@ ShaderResultCount qhenki::sxc::execute_compilation_job(tbb::concurrent_vector<Co
                                   }
                               });
 
-            return {.path = out_path, .output = output};
+            return {.path = out_path, .output = output, .input_vector = input_vector};
         });
 
     std::atomic_uint64_t succeeded_count{0};
@@ -497,26 +663,44 @@ ShaderResultCount qhenki::sxc::execute_compilation_job(tbb::concurrent_vector<Co
         {
             if (pa.output)
             {
+                bool any_failed = false;
                 for (const auto& co : *pa.output)
                 {
                     if (!co.error_message.empty())
                     {
                         ++failed_count;
+                        any_failed = true;
                     }
                     else
                     {
                         ++succeeded_count;
+                    }
+                }
 
-                        // TODO: permutations of the same shader need to be written to the same file
-                        // Needs to be a header with offsets
-
-                        if (!util::write_file(pa.path.c_str(), co.shader_data, co.shader_size))
+                // Only write to file if all permutations succeeded
+                if (!any_failed)
+                {
+                    if (pa.output->size() == 1)
+                    {
+                        const auto& co = pa.output->at(0);
+                        if (!write_file(pa.path.c_str(), co.shader_data, co.shader_size))
                         {
                             printf("Failed to write shader to file: %s\n", pa.path.string().c_str());
                             ++failed_count;
+                            --succeeded_count;
+                        }
+                    }
+                    else
+                    {
+                        if (!write_shader_blob(pa.path, *pa.output, *pa.input_vector))
+                        {
+                            printf("Failed to write shader blob to file: %s\n", pa.path.string().c_str());
+                            failed_count += pa.output->size();
+                            succeeded_count -= pa.output->size();
                         }
                     }
                 }
+
                 oneapi::tbb::tbb_allocator<CompilerOutputVector>().deallocate(pa.output, 1);
             }
         });

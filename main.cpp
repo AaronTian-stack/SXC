@@ -150,7 +150,7 @@ int main(int argc, char* argv[])
 
         // Print duration in seconds with milliseconds
         auto ms = std::chrono::duration_cast<std::chrono::milliseconds>(end - start).count();
-        double seconds = ms / 1000.0;
+        double seconds = static_cast<double>(ms) / 1000.0;
 
         printf("========== Build completed and took %.3f seconds ==========\n", seconds);
 
