@@ -41,7 +41,7 @@ int main(int argc, char* argv[])
 
         program.add_argument("-sm", "--shader-model")
             .help("HLSL shader model [X_Y]")
-            .choices("5_0", "5_1", "6_0", "6_1", "6_2", "6_3", "6_4", "6_5", "6_6")
+            .choices("5_0", "6_0", "6_1", "6_2", "6_3", "6_4", "6_5", "6_6")
             .nargs(1)
             .required();
 
