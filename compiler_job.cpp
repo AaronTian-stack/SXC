@@ -16,7 +16,10 @@
 
 #include <argparse/argparse.hpp>
 
-#include "graphics/d3d12/d3d12_shader_compiler.h"
+#include "graphics/d3d12/dxc_shader_compiler.h"
+#if defined(_WIN32) || defined(_WIN64)
+#include "graphics/d3d11/fxc_shader_compiler.h"
+#endif
 #include "utility/d3d_util.h"
 
 #include "qhenki/utility/file_util.h"
@@ -596,11 +599,19 @@ ShaderResultCount qhenki::sxc::execute_compilation_job(tbb::concurrent_vector<Co
         CompilerInputVector* input_vector;
     };
 
-    tbb::enumerable_thread_specific<gfx::D3D12ShaderCompiler> compilers;
+    tbb::enumerable_thread_specific<gfx::DXCShaderCompiler> d3d12_compilers;
+#if defined(_WIN32) || defined(_WIN64)
+    tbb::enumerable_thread_specific<gfx::FXCShaderCompiler> d3d11_compilers;
+#endif
     // Compile shader
     auto compile_shaders = tbb::make_filter<OutputPathAndCompilerInputVector, PathAndOutputs>(
         tbb::filter_mode::parallel,
-        [&compilers](const OutputPathAndCompilerInputVector& out_and_vector) -> PathAndOutputs
+        [&d3d12_compilers
+#if defined(_WIN32) || defined(_WIN64)
+         ,
+         &d3d11_compilers
+#endif
+    ](const OutputPathAndCompilerInputVector& out_and_vector) -> PathAndOutputs
         {
             const auto& out_path = out_and_vector.output_path;
             const auto input_vector = out_and_vector.input_vector;
@@ -610,7 +621,22 @@ ShaderResultCount qhenki::sxc::execute_compilation_job(tbb::concurrent_vector<Co
                 return {.path = "", .output = nullptr, .input_vector = nullptr};
             }
 
-            auto& compiler = compilers.local();
+            // Select compiler based on shader model
+            ShaderCompiler* compiler;
+            const auto& first_input = input_vector->at(0);
+
+            if (first_input.shader_model < gfx::ShaderModel::SM_6_0)
+            {
+#if defined(_WIN32) || defined(_WIN64)
+                compiler = &d3d11_compilers.local();
+#else
+                compiler = &d3d12_compilers.local();
+#endif
+            }
+            else
+            {
+                compiler = &d3d12_compilers.local();
+            }
 
             using allocator = oneapi::tbb::tbb_allocator<CompilerOutputVector>;
 
@@ -625,12 +651,12 @@ ShaderResultCount qhenki::sxc::execute_compilation_job(tbb::concurrent_vector<Co
 
             tbb::parallel_for(static_cast<size_t>(0),
                               input_vector->size(),
-                              [&](size_t i)
+                              [&output, compiler, input_vector](size_t i)
                               {
                                   const auto& input = (*input_vector)[i];
                                   output->emplace_back();
                                   auto& out = output->back();
-                                  const auto success = compiler.compile(input, out);
+                                  const auto success = compiler->compile(input, out);
 
                                   const auto tm = gfx::get_shader_model_char(input.shader_type, input.shader_model);
 
