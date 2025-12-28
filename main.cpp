@@ -1,4 +1,5 @@
 #include <qhenki/RHI/shader_compiler.h>
+#include <qhenki/utility/string_util.h>
 #include <argparse/argparse.hpp>
 #include <filesystem>
 #include <magic_enum/magic_enum.hpp>
@@ -96,16 +97,12 @@ int main(int argc, char* argv[])
             }
         }
 
-        std::array<char, 7> sm_str;
-        if (snprintf(sm_str.data(), sm_str.size(), "SM_%s", program.get<std::string>("--shader-model").c_str()) < 0)
-        {
-            throw std::runtime_error("Failed to extract SM string");
-        }
+        const auto sm_str = qhenki::util::format_string<7>("SM_%s", program.get<std::string>("--shader-model").c_str());
 
-        const auto sm = magic_enum::enum_cast<qhenki::gfx::ShaderModel>(sm_str.data());
+        const auto sm = magic_enum::enum_cast<qhenki::gfx::ShaderModel>(sm_str.buffer.data());
         if (!sm.has_value())
         {
-            throw std::runtime_error("Failed to reflect shader model: " + std::string(sm_str.data()));
+            throw std::runtime_error("Failed to reflect shader model: " + std::string(sm_str.buffer.data()));
         }
 
         const auto optimization = magic_enum::enum_cast<CompilerInput::Optimization>(
