@@ -161,12 +161,12 @@ int main(int argc, char* argv[])
 
         printf("========== Build completed and took %.3f seconds ==========\n", seconds);
 
-        return 0;
+        return EXIT_SUCCESS;
     }
     catch (const std::exception& err)
     {
         fprintf(stderr, "%s\n", err.what());
         fprintf(stderr, "%s", program.help().str().c_str());
-        return 1;
+        return EXIT_FAILURE;
     }
 }
