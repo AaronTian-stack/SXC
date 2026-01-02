@@ -26,6 +26,7 @@ struct CLIInput
     gfx::ShaderModel shader_model;
     CompilerInput::Optimization optimization;
     bool debug_flag;
+    bool force;
 };
 
 struct CompilerInputFile
@@ -73,5 +74,6 @@ struct ShaderResultCount
 };
 
 ShaderResultCount execute_compilation_job(tbb::concurrent_vector<CompilerInputVector>* inputs,
-                                          const std::string& output_dir);
+                                          const std::string& output_dir,
+                                          bool force);
 } // namespace qhenki::sxc

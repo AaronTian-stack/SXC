@@ -152,9 +152,10 @@ fs::file_time_type get_most_recent_time(const fs::path& file,
 bool needs_to_recompile_shader(const fs::path& input_path,
                                const fs::path& output_path,
                                const std::span<const std::string> include_paths,
-                               const CompilerInputVector& inputs)
+                               const CompilerInputVector& inputs,
+                               bool force)
 {
-    if (!fs::exists(output_path))
+    if (force || !fs::exists(output_path))
     {
         return true;
     }
@@ -527,7 +528,8 @@ fs::path SXCJob::get_resolved_output_name(const OutputInfo& info,
 }
 
 ShaderResultCount qhenki::sxc::execute_compilation_job(tbb::concurrent_vector<CompilerInputVector>* inputs,
-                                                       const std::string& output_dir)
+                                                       const std::string& output_dir,
+                                                       bool force)
 {
     // Go through inputs and just return the same one
     const auto collect_inputs =
@@ -559,7 +561,7 @@ ShaderResultCount qhenki::sxc::execute_compilation_job(tbb::concurrent_vector<Co
     // Check if input needs to be compiled
     const auto filter_shaders = tbb::make_filter<CompilerInputVector*, OutputPathAndCompilerInputVector>(
         tbb::filter_mode::parallel,
-        [&output_dir, &skipped_count](CompilerInputVector* input) -> OutputPathAndCompilerInputVector
+        [&output_dir, &skipped_count, force](CompilerInputVector* input) -> OutputPathAndCompilerInputVector
         {
             assert(input); // nullptr should have stopped pipeline from last filter
             assert(!input->empty());
@@ -580,7 +582,7 @@ ShaderResultCount qhenki::sxc::execute_compilation_job(tbb::concurrent_vector<Co
             const fs::path input_path = ci.get_path();
             const fs::path output_path = SXCJob::get_resolved_output_name(info, input_path, output_dir, input->size());
 
-            if (needs_to_recompile_shader(input_path, output_path, ci.includes, *input))
+            if (needs_to_recompile_shader(input_path, output_path, ci.includes, *input, force))
             {
                 return {.output_path = output_path, .input_vector = input};
             }

@@ -11,7 +11,7 @@
 
 int main(int argc, char* argv[])
 {
-    argparse::ArgumentParser program("SXC", "0.1.0");
+    argparse::ArgumentParser program("SXC", "0.2.0");
     program.add_description("FXC/DXC batch shader compiler.");
     program.set_prefix_chars("-+/");
     program.set_assign_chars("=:");
@@ -24,6 +24,8 @@ int main(int argc, char* argv[])
         program.add_argument("-g", "--global-defines").append().help("defines to be used for all shaders");
 
         program.add_argument("-dbg", "--debug-flag").flag().help("enable debug flag for all shaders");
+
+        program.add_argument("-f", "--force").flag().help("force recompilation of all shaders");
 
         program.add_argument("-o", "--optimization")
             .choices("O0", "O1", "O2", "O3")
@@ -122,7 +124,8 @@ int main(int argc, char* argv[])
                                                                           : std::span<const std::string>{},
                                     .shader_model = sm.value(),
                                     .optimization = optimization.value(),
-                                    .debug_flag = program.get<bool>("--debug-flag")};
+                                    .debug_flag = program.get<bool>("--debug-flag"),
+                                    .force = program.get<bool>("--force")};
 
         const auto start = std::chrono::steady_clock::now();
 
@@ -146,7 +149,7 @@ int main(int argc, char* argv[])
         printf("Using shader compiler library:\nDXC: %s\n", buffer1.data());
 #endif
 
-        const auto result_count = qhenki::sxc::execute_compilation_job(&inputs, input.output_dir);
+        const auto result_count = qhenki::sxc::execute_compilation_job(&inputs, input.output_dir, input.force);
 
         const auto end = std::chrono::steady_clock::now();
 
