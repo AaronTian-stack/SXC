@@ -102,7 +102,9 @@ fs::file_time_type get_most_recent_time(const fs::path& file,
 
     std::ifstream in(file);
     if (!in.is_open())
+    {
         return fs::file_time_type::min();
+    }
 
     fs::file_time_type latest = fs::last_write_time(file); // This can technically throw an exception
 
@@ -178,7 +180,9 @@ bool needs_to_recompile_shader(const fs::path& input_path,
     const auto output_time = fs::last_write_time(output_path);
 
     if (latest_input_time > output_time)
+    {
         return true;
+    }
 
     return false;
 }
