@@ -15,7 +15,9 @@ add_executable(SXC ${SXC_SOURCES} ${SXC_HEADERS})
 target_compile_features(SXC PRIVATE cxx_std_20)
 
 if(MSVC)
-    target_compile_options(SXC PRIVATE /MP)
+    target_compile_options(SXC PRIVATE /MP /EHsc)
+else()
+    target_compile_options(SXC PRIVATE -fexceptions)
 endif()
 
 target_include_directories(SXC PRIVATE
