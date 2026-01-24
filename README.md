@@ -1,6 +1,8 @@
 # SXC - Standalone Shader Compiler
 
-SXC (Shader eXecution Compiler) is a command line tool for batch compilation of HLSL shaders built on top of the QhenkiX graphics library. It provides parallel compilation with support for shader permutations and multiple shader models. It is heavily inspired by [ShaderMake](https://github.com/NVIDIA-RTX/ShaderMake) (MIT License), but with a key difference being that it does not create a individual subprocess for every shader compilation, which should result in lower overhead. 
+SXC (Shader eXecution Compiler) is a command line tool for batch compilation of HLSL shaders. It is a frontend for compiling shaders using [DXC](https://github.com/microsoft/DirectXShaderCompiler) and [FXC](https://learn.microsoft.com/en-us/windows/win32/direct3dtools/fxc). Although SXC uses the [QhenkiX](../QhenkiX) library, it can be used on its own as a separate tool.
+
+SXC is heavily inspired by [ShaderMake](https://github.com/NVIDIA-RTX/ShaderMake) (MIT License), but with a key difference being that it does not create a individual subprocess for every shader compilation, which should result in lower overhead. 
 
 ## Features
 
@@ -13,7 +15,7 @@ SXC (Shader eXecution Compiler) is a command line tool for batch compilation of 
 
 ## Basic Usage
 
-By default, SXC will use the system installed DXC or FXC compiler DLL depending on the shader model. To use a specific DLL, place it in the same directory as SXC.exe.
+By default, SXC will use the system installed DXC or FXC compiler shared library depending on the shader model. To use a specific DLL, place it in the same directory as SXC.exe.
 
 ```bash
 SXC.exe -c <config_file> -sm <shader_model> -out <output_dir> [options]
@@ -86,4 +88,3 @@ SXC.exe -c shaders.config -sm 6_0 -out compiled_shaders -i include_dir -g GLOBAL
 
 - [QhenkiX](https://github.com/AaronTian-stack/QhenkiX) - MIT License
 - [Intel TBB](https://github.com/uxlfoundation/oneTBB) - Apache 2.0 License
-- DirectX Shader Compiler (DXC) or FXC
