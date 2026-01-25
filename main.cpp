@@ -58,13 +58,11 @@ int main(int argc, char* argv[])
     {
         program.parse_args(argc, argv);
 
-        // Verify config file path
         if (!std::filesystem::exists(config_file_path))
         {
             throw std::runtime_error("Config file does not exist: " + program.get<std::string>("--config-path"));
         }
 
-        // Set working directory to config file location
         const auto config_dir = std::filesystem::path(config_file_path).parent_path();
         if (!config_dir.empty())
         {
@@ -76,7 +74,6 @@ int main(int argc, char* argv[])
 
         { // Verify optional arguments
 
-            // Check PDB path exists if specified
             if (pdb.has_value())
             {
                 if (const auto& pdb_path = pdb.value(); !std::filesystem::exists(pdb_path))
@@ -86,7 +83,6 @@ int main(int argc, char* argv[])
                 }
             }
 
-            // Check if all include paths exist if specified
             if (includes.has_value())
             {
                 for (const auto& include_paths = includes.value(); const auto& include_path : include_paths)
@@ -158,7 +154,6 @@ int main(int argc, char* argv[])
                result_count.failed_count,
                result_count.skipped_count);
 
-        // Print duration in seconds with milliseconds
         auto ms = std::chrono::duration_cast<std::chrono::milliseconds>(end - start).count();
         double seconds = static_cast<double>(ms) / 1000.0;
 

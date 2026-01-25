@@ -46,7 +46,6 @@ std::string compute_defines_hash(const CompilerInputVector& inputs)
         }
     }
 
-    // Convert to hex string
     std::ostringstream oss;
     oss << std::hex << combined_hash;
     return oss.str();
@@ -106,7 +105,7 @@ fs::file_time_type get_most_recent_time(const fs::path& file,
         return fs::file_time_type::min();
     }
 
-    fs::file_time_type latest = fs::last_write_time(file); // This can technically throw an exception
+    fs::file_time_type latest = fs::last_write_time(file);
 
     std::string line;
     std::regex include_regex(R"(^\s*#\s*include\s*["<](.*)[">])");
@@ -295,9 +294,8 @@ const char* SXCJob::shader_type_to_str(const gfx::ShaderType type)
         return "_cs_";
     case gfx::ShaderType::LIBRARY_SHADER:
         return "_lib_";
-    default:
-        throw std::runtime_error("Unknown shader type");
     }
+    throw std::runtime_error("Unknown shader type");
 }
 
 int SXCJob::parse_config(const CLIInput& input,
@@ -570,7 +568,7 @@ ShaderResultCount qhenki::sxc::execute_compilation_job(tbb::concurrent_vector<Co
             assert(input); // nullptr should have stopped pipeline from last filter
             assert(!input->empty());
 
-            // Assumes that all inputs are the same shader!
+            // Assumes that all inputs are the same shader
 
             // Check if the shader needs to be compiled
             // Since all inputs are the same shader just with different defines, we can cull entire groups
@@ -688,7 +686,6 @@ ShaderResultCount qhenki::sxc::execute_compilation_job(tbb::concurrent_vector<Co
 
     std::atomic_uint64_t succeeded_count{0};
     std::atomic_uint64_t failed_count{0};
-    // Write out and collect results
     auto collect_compile_results = tbb::make_filter<PathAndOutputs, void>(
         tbb::filter_mode::parallel,
         [&failed_count, &succeeded_count](const PathAndOutputs& pa) -> void
@@ -709,7 +706,6 @@ ShaderResultCount qhenki::sxc::execute_compilation_job(tbb::concurrent_vector<Co
                     }
                 }
 
-                // Only write to file if all permutations succeeded
                 if (!any_failed)
                 {
                     if (pa.output->size() == 1)
