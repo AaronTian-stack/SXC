@@ -90,7 +90,8 @@ fs::file_time_type get_most_recent_time(const fs::path& file,
 {
     if (!fs::exists(file))
     {
-        printf("Include file not found: %s\n", file.string().c_str());
+        printf("Include file not found: %s\n This may be a false positive if the include is in a disabled macro. \n",
+               file.string().c_str());
         return fs::file_time_type::min();
     }
 
