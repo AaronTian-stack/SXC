@@ -712,7 +712,13 @@ ShaderResultCount qhenki::sxc::execute_compilation_job(tbb::concurrent_vector<Co
                     if (pa.output->size() == 1)
                     {
                         const auto& co = pa.output->at(0);
-                        if (!write_file(pa.path.c_str(), co.shader_data, co.shader_size))
+                        if (co.shader_size == 0 || co.shader_data == nullptr)
+                        {
+                            printf("0 byte shader output: %s\n", pa.path.string().c_str());
+                            ++failed_count;
+                            --succeeded_count;
+                        }
+                        else if (!write_file(pa.path.c_str(), co.shader_data, co.shader_size))
                         {
                             printf("Failed to write shader to file: %s\n", pa.path.string().c_str());
                             ++failed_count;
