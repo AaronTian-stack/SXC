@@ -2,19 +2,16 @@ cmake_minimum_required(VERSION 3.18)
 project(SXC LANGUAGES CXX)
 include(${CMAKE_CURRENT_SOURCE_DIR}/../QhenkiX/cmake/ScopedBuildSharedLibs.cmake)
 
-set(SXC_TBB_SOURCE_DIR "${CMAKE_CURRENT_SOURCE_DIR}/external/tbb")
-if(NOT EXISTS "${SXC_TBB_SOURCE_DIR}/CMakeLists.txt")
-    message(FATAL_ERROR
-        "SXC requires oneTBB source at ${SXC_TBB_SOURCE_DIR}. "
-        "Initialize submodules with: git submodule update --init --recursive"
-    )
+set(SXC_TBB_ROOT "${CMAKE_CURRENT_SOURCE_DIR}/external/tbb")
+if(WIN32)
+    set(TBB_DIR "${SXC_TBB_ROOT}/oneapi-tbb-2022.3.0-win/oneapi-tbb-2022.3.0/lib/cmake/tbb")
+elseif(APPLE)
+    set(TBB_DIR "${SXC_TBB_ROOT}/oneapi-tbb-2022.3.0-mac/oneapi-tbb-2022.3.0/lib/cmake/tbb")
+else()
+    set(TBB_DIR "${SXC_TBB_ROOT}/oneapi-tbb-2022.3.0-lin/oneapi-tbb-2022.3.0/lib/cmake/tbb")
 endif()
 
-set(TBB_TEST OFF CACHE BOOL "" FORCE)
-set(TBB_INSTALL OFF CACHE BOOL "" FORCE)
-set(TBB_VERIFY_DEPENDENCY_SIGNATURE ON CACHE BOOL "" FORCE)
-
-qhenkix_add_subdirectory_with_build_shared_libs(${SXC_TBB_SOURCE_DIR} ${CMAKE_BINARY_DIR}/oneTBB ON EXCLUDE_FROM_ALL)
+find_package(TBB CONFIG REQUIRED COMPONENTS tbb)
 
 set(SXC_SOURCES
     "${CMAKE_CURRENT_SOURCE_DIR}/main.cpp"
@@ -38,7 +35,7 @@ endif()
 target_include_directories(SXC PRIVATE
     "${REPO_ROOT}/QhenkiX/include"
     "${REPO_ROOT}/QhenkiX/qhenki"
-    "${CMAKE_CURRENT_SOURCE_DIR}/external/"
+    "${CMAKE_CURRENT_SOURCE_DIR}/external"
 )
 
 target_link_libraries(SXC PRIVATE QhenkiX)
