@@ -674,7 +674,7 @@ ShaderResultCount qhenki::sxc::execute_compilation_job(tbb::concurrent_vector<Co
                                   }
                                   else
                                   {
-                                      printf("Permutation #%zu: Compiling shader: %s %s %s",
+                                      printf("Permutation #%zu: Compiling shader: %s %s %s\n",
                                              i,
                                              input.get_path().data(),
                                              tm.data(),
