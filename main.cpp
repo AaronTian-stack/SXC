@@ -159,6 +159,11 @@ int main(int argc, char* argv[])
 
         printf("========== Build completed and took %.3f seconds ==========\n", seconds);
 
+        if (result_count.failed_count > 0)
+        {
+            return EXIT_FAILURE;
+        }
+
         return EXIT_SUCCESS;
     }
     catch (const std::exception& err)
