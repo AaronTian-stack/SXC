@@ -48,4 +48,31 @@ if(WIN32)
             $<TARGET_FILE_DIR:SXC>
         COMMAND_EXPAND_LISTS
     )
+
+    set(SXC_DXC_ROOT "${REPO_ROOT}/QhenkiX/external/DirectXShaderCompiler")
+    if(CMAKE_SIZEOF_VOID_P EQUAL 8)
+        set(SXC_DXC_BIN_DIR "${SXC_DXC_ROOT}/dxc_2026_02_20/bin/x64")
+    elseif(CMAKE_SIZEOF_VOID_P EQUAL 4)
+        set(SXC_DXC_BIN_DIR "${SXC_DXC_ROOT}/dxc_2026_02_20/bin/x86")
+    else()
+        message(WARNING "SXC: Unknown pointer size; defaulting DXC binary directory to x64")
+        set(SXC_DXC_BIN_DIR "${SXC_DXC_ROOT}/dxc_2026_02_20/bin/x64")
+    endif()
+
+    add_custom_command(TARGET SXC POST_BUILD
+        COMMAND ${CMAKE_COMMAND} -E copy_if_different
+            "${SXC_DXC_BIN_DIR}/dxcompiler.dll"
+            "${SXC_DXC_BIN_DIR}/dxil.dll"
+            $<TARGET_FILE_DIR:SXC>
+    )
+elseif(UNIX)
+    set(SXC_DXC_ROOT "${REPO_ROOT}/QhenkiX/external/DirectXShaderCompiler")
+    set(SXC_DXC_BIN_DIR "${SXC_DXC_ROOT}/linux_dxc_2026_02_20.x86_64/lib")
+
+    add_custom_command(TARGET SXC POST_BUILD
+        COMMAND ${CMAKE_COMMAND} -E copy_if_different
+            "${SXC_DXC_BIN_DIR}/libdxcompiler.so"
+            "${SXC_DXC_BIN_DIR}/libdxil.so"
+            $<TARGET_FILE_DIR:SXC>
+    )
 endif()

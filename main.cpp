@@ -11,7 +11,7 @@
 
 int main(int argc, char* argv[])
 {
-    argparse::ArgumentParser program("SXC", "0.2.1");
+    argparse::ArgumentParser program("SXC", "0.3.0");
     program.add_description("FXC/DXC batch shader compiler.");
     program.set_prefix_chars("-+/");
     program.set_assign_chars("=:");
@@ -24,6 +24,8 @@ int main(int argc, char* argv[])
         program.add_argument("-g", "--global-defines").append().help("defines to be used for all shaders");
 
         program.add_argument("-dbg", "--debug-flag").flag().help("enable debug flag for all shaders");
+
+        program.add_argument("-spirv", "--output-spirv").flag().help("output SPIR-V instead of DXBC/DXIL");
 
         program.add_argument("-f", "--force").flag().help("force recompilation of all shaders");
 
@@ -103,6 +105,11 @@ int main(int argc, char* argv[])
             throw std::runtime_error("Failed to reflect shader model: " + std::string(sm_str.buffer.data()));
         }
 
+        if (program.get<bool>("--output-spirv") && sm.value() < qhenki::gfx::ShaderModel::SM_6_0)
+        {
+            throw std::runtime_error("SPIR-V output requires shader model 6.0 or higher");
+        }
+
         const auto optimization = magic_enum::enum_cast<CompilerInput::Optimization>(
             program.get<std::string>("--optimization"));
         if (!optimization.has_value())
@@ -121,7 +128,8 @@ int main(int argc, char* argv[])
                                     .shader_model = sm.value(),
                                     .optimization = optimization.value(),
                                     .debug_flag = program.get<bool>("--debug-flag"),
-                                    .force = program.get<bool>("--force")};
+                                    .force = program.get<bool>("--force"),
+                                    .output_spirv = program.get<bool>("--output-spirv")};
 
         const auto start = std::chrono::steady_clock::now();
 
@@ -145,7 +153,8 @@ int main(int argc, char* argv[])
         printf("Using shader compiler library:\nDXC: %s\n", buffer1.data());
 #endif
 
-        const auto result_count = qhenki::sxc::execute_compilation_job(&inputs, input.output_dir, input.force);
+        const auto result_count =
+            qhenki::sxc::execute_compilation_job(&inputs, input.output_dir, input.force, input.output_spirv);
 
         const auto end = std::chrono::steady_clock::now();
 

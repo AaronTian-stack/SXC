@@ -27,6 +27,7 @@ struct CLIInput
     CompilerInput::Optimization optimization;
     bool debug_flag;
     bool force;
+    bool output_spirv = false;
 };
 
 struct CompilerInputFile
@@ -40,6 +41,7 @@ struct OutputInfo
     gfx::ShaderModel sm;
     gfx::ShaderType st;
     std::string_view entry_point;
+    bool output_spirv = false;
 };
 
 using CompilerInputVector = boost::container::small_vector<CompilerInput, 1>;
@@ -75,5 +77,6 @@ struct ShaderResultCount
 
 ShaderResultCount execute_compilation_job(tbb::concurrent_vector<CompilerInputVector>* inputs,
                                           const std::string& output_dir,
-                                          bool force);
+                                          bool force,
+                                          bool output_spirv = false);
 } // namespace qhenki::sxc

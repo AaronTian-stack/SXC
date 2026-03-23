@@ -502,7 +502,18 @@ fs::path SXCJob::get_resolved_output_name(const OutputInfo& info,
         filename += info.entry_point;
     }
 
-    // TODO: flag for Vulkan/SPIRV
+    if (info.output_spirv)
+    {
+        if (permutation_count > 1)
+        {
+            filename += ".spv_blob";
+        }
+        else
+        {
+            filename += ".spv";
+        }
+        return fs::path(output_dir) / filename;
+    }
 
     if (permutation_count > 1)
     {
@@ -532,7 +543,8 @@ fs::path SXCJob::get_resolved_output_name(const OutputInfo& info,
 
 ShaderResultCount qhenki::sxc::execute_compilation_job(tbb::concurrent_vector<CompilerInputVector>* inputs,
                                                        const std::string& output_dir,
-                                                       bool force)
+                                                       bool force,
+                                                       bool output_spirv)
 {
     // Go through inputs and just return the same one
     const auto collect_inputs =
@@ -564,7 +576,8 @@ ShaderResultCount qhenki::sxc::execute_compilation_job(tbb::concurrent_vector<Co
     // Check if input needs to be compiled
     const auto filter_shaders = tbb::make_filter<CompilerInputVector*, OutputPathAndCompilerInputVector>(
         tbb::filter_mode::parallel,
-        [&output_dir, &skipped_count, force](CompilerInputVector* input) -> OutputPathAndCompilerInputVector
+        [&output_dir, &skipped_count, force, output_spirv](
+            CompilerInputVector* input) -> OutputPathAndCompilerInputVector
         {
             assert(input); // nullptr should have stopped pipeline from last filter
             assert(!input->empty());
@@ -581,6 +594,7 @@ ShaderResultCount qhenki::sxc::execute_compilation_job(tbb::concurrent_vector<Co
                 .sm = ci.shader_model,
                 .st = ci.shader_type,
                 .entry_point = ci.entry_point,
+                .output_spirv = output_spirv,
             };
             const fs::path input_path = ci.get_path();
             const fs::path output_path = SXCJob::get_resolved_output_name(info, input_path, output_dir, input->size());
@@ -616,7 +630,8 @@ ShaderResultCount qhenki::sxc::execute_compilation_job(tbb::concurrent_vector<Co
          ,
          &d3d11_compilers
 #endif
-    ](const OutputPathAndCompilerInputVector& out_and_vector) -> PathAndOutputs
+         ,
+         output_spirv](const OutputPathAndCompilerInputVector& out_and_vector) -> PathAndOutputs
         {
             const auto& out_path = out_and_vector.output_path;
             const auto input_vector = out_and_vector.input_vector;
@@ -630,7 +645,8 @@ ShaderResultCount qhenki::sxc::execute_compilation_job(tbb::concurrent_vector<Co
             ShaderCompiler* compiler;
             const auto& first_input = input_vector->at(0);
 
-            if (first_input.shader_model < gfx::ShaderModel::SM_6_0)
+            assert(!(output_spirv && first_input.shader_model < gfx::ShaderModel::SM_6_0));
+            if (!output_spirv && first_input.shader_model < gfx::ShaderModel::SM_6_0)
             {
 #if defined(_WIN32) || defined(_WIN64)
                 compiler = &d3d11_compilers.local();
@@ -656,12 +672,12 @@ ShaderResultCount qhenki::sxc::execute_compilation_job(tbb::concurrent_vector<Co
 
             tbb::parallel_for(static_cast<size_t>(0),
                               input_vector->size(),
-                              [&output, compiler, input_vector](size_t i)
+                              [&output, compiler, input_vector, output_spirv](const size_t i)
                               {
                                   const auto& input = (*input_vector)[i];
                                   output->emplace_back();
                                   auto& out = output->back();
-                                  const auto success = compiler->compile(input, out);
+                                  const auto success = compiler->compile(input, out, output_spirv);
 
                                   const auto tm = gfx::get_shader_model_char(input.shader_type, input.shader_model);
 
@@ -689,7 +705,7 @@ ShaderResultCount qhenki::sxc::execute_compilation_job(tbb::concurrent_vector<Co
     std::atomic_uint64_t failed_count{0};
     auto collect_compile_results = tbb::make_filter<PathAndOutputs, void>(
         tbb::filter_mode::parallel,
-        [&failed_count, &succeeded_count](const PathAndOutputs& pa) -> void
+        [&failed_count, &succeeded_count](const PathAndOutputs& pa)
         {
             if (pa.output)
             {
