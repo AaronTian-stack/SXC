@@ -226,7 +226,7 @@ bool write_shader_blob(const fs::path& output_path,
 
         ShaderBlobEntry entry{
             .offset = data_offset,
-            .size = co.shader_size,
+            .size = co.blob->GetBufferSize(),
             .define_count = static_cast<uint32_t>(defines.size()),
         };
         out.write(reinterpret_cast<const char*>(&entry), sizeof(entry));
@@ -237,13 +237,13 @@ bool write_shader_blob(const fs::path& output_path,
             out.write(def.c_str(), def.size() + 1); // Include null terminator
         }
 
-        data_offset += co.shader_size;
+        data_offset += co.blob->GetBufferSize();
     }
 
     for (const auto& co : outputs)
     {
-        assert(co.shader_size <= std::numeric_limits<long long>::max());
-        out.write(static_cast<const char*>(co.shader_data), co.shader_size);
+        assert(co.blob->GetBufferSize() <= std::numeric_limits<long long>::max());
+        out.write(static_cast<const char*>(co.blob->GetBufferPointer()), co.blob->GetBufferSize());
     }
 
     if (!out.good())
@@ -728,13 +728,13 @@ ShaderResultCount qhenki::sxc::execute_compilation_job(tbb::concurrent_vector<Co
                     if (pa.output->size() == 1)
                     {
                         const auto& co = pa.output->at(0);
-                        if (co.shader_size == 0 || co.shader_data == nullptr)
+                        if (!co.blob || co.blob->GetBufferSize() == 0 || co.blob->GetBufferPointer() == nullptr)
                         {
                             printf("0 byte shader output: %s\n", pa.path.string().c_str());
                             ++failed_count;
                             --succeeded_count;
                         }
-                        else if (!write_file(pa.path.c_str(), co.shader_data, co.shader_size))
+                        else if (!write_file(pa.path.c_str(), co.blob->GetBufferPointer(), co.blob->GetBufferSize()))
                         {
                             printf("Failed to write shader to file: %s\n", pa.path.string().c_str());
                             ++failed_count;

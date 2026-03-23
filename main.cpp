@@ -11,7 +11,7 @@
 
 int main(int argc, char* argv[])
 {
-    argparse::ArgumentParser program("SXC", "0.3.0");
+    argparse::ArgumentParser program("SXC", "0.4.0");
     program.add_description("FXC/DXC batch shader compiler.");
     program.set_prefix_chars("-+/");
     program.set_assign_chars("=:");
