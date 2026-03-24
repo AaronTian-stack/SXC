@@ -9,9 +9,11 @@ SXC is heavily inspired by [ShaderMake](https://github.com/NVIDIA-RTX/ShaderMake
 - **Batch Compilation**: Compile multiple shaders from configuration file
 - **Parallel Processing**: Uses Intel TBB for efficient multi-threaded compilation
 - **Shader Permutations**: Support for generating multiple variants with different defines
-- **Multiple Shader Models**: Support for SM 5.0 through 6.6
-- **DXIL Library (RT)**: Compile shader libraries for DXR
+- **Multiple Shader Models**: Support for SM 5.0 and SM 6.0 through 6.6
+- **Library Profile Support**: Compile DXIL libraries (`lib` / `library`)
 - **Debug Support**: Optional debug information generation
+- **Incremental Rebuilds**: Skips up-to-date shaders by checking file timestamps and include dependencies
+- **Optional SPIR-V Output**: Can emit SPIR-V for SM 6.0+
 
 ## Basic Usage
 
@@ -24,7 +26,7 @@ SXC.exe -c <config_file> -sm <shader_model> -out <output_dir> [options]
 ### Required Arguments
 
 - `-c, --config-path`: Path to the configuration file
-- `-sm, --shader-model`: Target shader model (5_0, 5_1, 6_0, 6_1, 6_2, 6_3, 6_4, 6_5, 6_6)
+- `-sm, --shader-model`: Target shader model (`5_0`, `6_0`, `6_1`, `6_2`, `6_3`, `6_4`, `6_5`, `6_6`)
 - `-out, --output`: Output directory for compiled shaders
 
 ### Optional Arguments
@@ -33,6 +35,8 @@ SXC.exe -c <config_file> -sm <shader_model> -out <output_dir> [options]
 - `-i, --include-path`: Additional include directories (can be specified multiple times)
 - `-g, --global-defines`: Global preprocessor defines for all shaders (can be specified multiple times)
 - `-dbg, --debug-flag`: Enable debug information for all shaders
+- `-spirv, --output-spirv`: Emit SPIR-V output (requires shader model 6.0 or higher)
+- `-f, --force`: Force recompilation of shaders even if up-to-date
 - `-o, --optimization`: Default optimization level (O0, O1, O2, O3) [default: O3]
 
 **Note**: Paths are resolved relative to the configuration file's directory location.
@@ -48,8 +52,8 @@ The configuration file contains one shader compilation job per line. Each line s
 ### Configuration Parameters
 
 - `-p, --path`: Path to the HLSL shader file
-- `-e, --entry-point`: Shader entry point function name (optional for `lib`)
-- `-st, --shader-type`: Shader type (`vs` for vertex, `ps` for pixel, `cs` for compute, `lib` for DXIL library)
+- `-e, --entry-point`: Shader entry point function name (required for non-library shader types)
+- `-st, --shader-type`: Shader type (`vs`, `ps`, `cs`, `lib`)
 - `-out, --output-dir`: Override global output directory for this shader
 - `-d, --define`: Preprocessor defines (supports permutation syntax)
 - `-o, --optimization`: Override global optimization level
@@ -68,7 +72,9 @@ This will generate 4 shader variants:
 - `FEATURE_A=1, FEATURE_B=0`
 - `FEATURE_A=1, FEATURE_B=1`
 
-All shader permutations are compiled and written to a single binary file. To read specific permutations at runtime, use the `find_permutation_in_blob()` function from `qhenki/utility/shader_blob.h`. This function allows you to query a permutation by its defines and returns a pointer to the compiled shader bytecode. `shader_blob.h` is part of QhenkiX but can be used as a standalone header, so if you wish to only use SXC you can just copy the file into your project.
+All shader permutations are compiled and written to a single binary file. There is an additional `.meta` file generated to track permutation changes for incremental rebuild decisions.
+
+To read specific permutations at runtime, use the `find_permutation_in_blob()` function from `qhenki/utility/shader_blob.h`. This function allows you to query a permutation by its defines and returns a pointer to the compiled shader bytecode. `shader_blob.h` is part of QhenkiX but can be used as a standalone header, so if you wish to only use SXC you can just copy the file into your project.
 
 ## Example
 
@@ -77,6 +83,7 @@ All shader permutations are compiled and written to a single binary file. To rea
 -p basic_vs.hlsl -e main -st vs
 -p basic_ps.hlsl -e main -st ps -d USE_TEXTURE={0,1}
 -p compute.hlsl -e CSMain -st cs -o O2
+-p raytracing_lib.hlsl -st lib
 ```
 
 ### Command Line
@@ -87,4 +94,5 @@ SXC.exe -c shaders.config -sm 6_0 -out compiled_shaders -i include_dir -g GLOBAL
 ## Dependencies
 
 - [QhenkiX](https://github.com/AaronTian-stack/QhenkiX) - MIT License
-- [Intel TBB](https://github.com/uxlfoundation/oneTBB) - Apache 2.0 License
+- [oneTBB](https://github.com/uxlfoundation/oneTBB) - Apache 2.0 License
+- [argparse](https://github.com/p-ranav/argparse) - MIT License
