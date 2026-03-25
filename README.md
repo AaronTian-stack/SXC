@@ -17,7 +17,7 @@ SXC is heavily inspired by [ShaderMake](https://github.com/NVIDIA-RTX/ShaderMake
 
 ## Basic Usage
 
-By default, SXC will use the system installed DXC or FXC compiler shared library depending on the shader model. To use a specific DLL, place it in the same directory as SXC.exe.
+By default, SXC will use the version of [DXC included with QhenkiX](../QhenkiX/external/DirectXShaderCompiler) and the version of FXC that is installed on the system depending on the shader model. To use a specific DLL, place it in the same directory as SXC.exe.
 
 ```bash
 SXC.exe -c <config_file> -sm <shader_model> -out <output_dir> [options]
