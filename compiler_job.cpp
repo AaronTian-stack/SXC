@@ -242,7 +242,7 @@ bool write_shader_blob(const fs::path& output_path,
 
     for (const auto& co : outputs)
     {
-        assert(co.blob->GetBufferSize() <= std::numeric_limits<long long>::max());
+        assert(co.blob->GetBufferSize() <= std::numeric_limits<std::streamsize>::max());
         out.write(static_cast<const char*>(co.blob->GetBufferPointer()), co.blob->GetBufferSize());
     }
 
@@ -748,6 +748,13 @@ ShaderResultCount qhenki::sxc::execute_compilation_job(tbb::concurrent_vector<Co
                             printf("Failed to write shader blob to file: %s\n", pa.path.string().c_str());
                             failed_count += pa.output->size();
                             succeeded_count -= pa.output->size();
+                        }
+                    }
+                    for (const auto& co : *pa.output)
+                    {
+                        if (co.blob)
+                        {
+                            co.blob->Release();
                         }
                     }
                 }
