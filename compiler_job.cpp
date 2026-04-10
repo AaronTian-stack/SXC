@@ -679,7 +679,7 @@ ShaderResultCount qhenki::sxc::execute_compilation_job(tbb::concurrent_vector<Co
                                   auto& out = output->back();
                                   const auto success = compiler->compile(input, out, output_spirv);
 
-                                  const auto tm = gfx::get_shader_model_char(input.shader_type, input.shader_model);
+                                  const auto tm = gfx::shader_model_char(input.shader_type, input.shader_model);
 
                                   if (success)
                                   {
