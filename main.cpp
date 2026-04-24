@@ -1,10 +1,12 @@
 #include <qhenki/RHI/shader_compiler.h>
 #include <qhenki/utility/string_util.h>
 #include <argparse/argparse.hpp>
+#include <cinttypes>
 #include <filesystem>
 #include <magic_enum/magic_enum.hpp>
 #include "compiler_job.h"
 #include "graphics/d3d12/dxc_shader_compiler.h"
+#include "smartpointer.h"
 #if defined(_WIN32) || defined(_WIN64)
 #include "graphics/d3d11/fxc_shader_compiler.h"
 #endif
@@ -13,7 +15,11 @@ int main(int argc, char* argv[])
 {
     argparse::ArgumentParser program("SXC", "0.4.0");
     program.add_description("FXC/DXC batch shader compiler.");
+#if defined(_WIN32) || defined(_WIN64)
     program.set_prefix_chars("-+/");
+#else
+    program.set_prefix_chars("-+");
+#endif
     program.set_assign_chars("=:");
 
     { // OPTIONAL ARGUMENTS
@@ -141,16 +147,20 @@ int main(int argc, char* argv[])
             return 1;
         }
 
-        constexpr auto buffer_length = 512;
-        std::array<char, buffer_length> buffer1, buffer2;
+        constexpr auto buffer_length = 4096;
+#ifdef __linux__
+        static_assert(buffer_length >= PATH_MAX);
+#endif
 
-        qhenki::gfx::DXCShaderCompiler::get_compiler_path(buffer1.data(), buffer_length);
+        auto dxc_name_buffer = mkU<char[]>(buffer_length);
+        qhenki::gfx::DXCShaderCompiler::get_compiler_path(dxc_name_buffer.get(), buffer_length);
 
 #if defined(_WIN32) || defined(_WIN64)
-        qhenki::gfx::FXCShaderCompiler::get_compiler_path(buffer2.data(), buffer_length);
-        printf("Using shader compiler libraries:\nDXC: %s\nFXC: %s\n", buffer1.data(), buffer2.data());
+        auto fxc_name_buffer = mkU<char[]>(buffer_length);
+        qhenki::gfx::FXCShaderCompiler::get_compiler_path(fxc_name_buffer.get(), buffer_length);
+        printf("Using shader compiler libraries:\nDXC: %s\nFXC: %s\n", dxc_name_buffer.get(), fxc_name_buffer.get());
 #else
-        printf("Using shader compiler library:\nDXC: %s\n", buffer1.data());
+        printf("Using shader compiler library:\nDXC: %s\n", dxc_name_buffer.get());
 #endif
 
         const auto result_count =
@@ -158,7 +168,7 @@ int main(int argc, char* argv[])
 
         const auto end = std::chrono::steady_clock::now();
 
-        printf("========== Build: %llu succeeded, %llu failed, %llu up-to-date ==========\n",
+        printf("========== Build: %" PRIu64 " succeeded, %" PRIu64 " failed, %" PRIu64 " up-to-date ==========\n",
                result_count.succeeded_count,
                result_count.failed_count,
                result_count.skipped_count);

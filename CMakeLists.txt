@@ -44,7 +44,7 @@ target_link_libraries(SXC PRIVATE TBB::tbb)
 if(WIN32)
     add_custom_command(TARGET SXC POST_BUILD
         COMMAND ${CMAKE_COMMAND} -E copy_if_different
-            $<TARGET_RUNTIME_DLLS:SXC>
+            $<FILTER:$<TARGET_RUNTIME_DLLS:SXC>,EXCLUDE,SDL3\\.dll$>
             $<TARGET_FILE_DIR:SXC>
         COMMAND_EXPAND_LISTS
     )
@@ -69,10 +69,13 @@ elseif(UNIX)
     set(SXC_DXC_ROOT "${REPO_ROOT}/QhenkiX/external/DirectXShaderCompiler")
     set(SXC_DXC_BIN_DIR "${SXC_DXC_ROOT}/linux_dxc_2026_02_20.x86_64/lib")
 
+    # libdxil.so ships with SONAME "libdxildll.so"
     add_custom_command(TARGET SXC POST_BUILD
         COMMAND ${CMAKE_COMMAND} -E copy_if_different
             "${SXC_DXC_BIN_DIR}/libdxcompiler.so"
-            "${SXC_DXC_BIN_DIR}/libdxil.so"
             $<TARGET_FILE_DIR:SXC>
+        COMMAND ${CMAKE_COMMAND} -E copy_if_different
+            "${SXC_DXC_BIN_DIR}/libdxil.so"
+            "$<TARGET_FILE_DIR:SXC>/libdxildll.so"
     )
 endif()

@@ -20,10 +20,10 @@
 #if defined(_WIN32) || defined(_WIN64)
 #include "graphics/d3d11/fxc_shader_compiler.h"
 #endif
-#include "utility/d3d_util.h"
 
 #include "qhenki/utility/file_util.h"
 #include "qhenki/utility/shader_blob.h"
+#include "qhenki/utility/shader_model_util.h"
 
 
 using namespace qhenki::sxc;
