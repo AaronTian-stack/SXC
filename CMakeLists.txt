@@ -34,7 +34,7 @@ endif()
 
 target_include_directories(SXC PRIVATE
     "${REPO_ROOT}/QhenkiX/include"
-    "${REPO_ROOT}/QhenkiX/qhenki"
+    "${REPO_ROOT}/QhenkiX/src"
     "${CMAKE_CURRENT_SOURCE_DIR}/external"
 )
 
