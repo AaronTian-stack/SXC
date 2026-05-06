@@ -9,8 +9,8 @@
 
 #include <oneapi/tbb/concurrent_vector.h>
 
-#include <qhenki/RHI/shader.h>
-#include <qhenki/RHI/shader_compiler.h>
+#include <qhenki/rhi/shader.h>
+#include <qhenki/rhi/shader_compiler.h>
 
 namespace qhenki::sxc
 {

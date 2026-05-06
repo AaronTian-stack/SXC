@@ -1,4 +1,4 @@
-#include <qhenki/RHI/shader_compiler.h>
+#include <qhenki/rhi/shader_compiler.h>
 #include <qhenki/utility/string_util.h>
 #include <argparse/argparse.hpp>
 #include <cinttypes>
