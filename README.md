@@ -1,6 +1,6 @@
 # SXC - Standalone Shader Compiler
 
-SXC (Shader eXecution Compiler) is a command line tool for batch compilation of HLSL shaders. It is a frontend for compiling shaders using [DXC](https://github.com/microsoft/DirectXShaderCompiler) and [FXC](https://learn.microsoft.com/en-us/windows/win32/direct3dtools/fxc). Although SXC uses the [QhenkiX](../QhenkiX) library, it can be used on its own as a separate tool.
+SXC (Shader eXecution Compiler) is a command line tool for batch compilation of Slang HLSL shaders, acting as a frontend for [Slang](https://github.com/shader-slang/slang) to produce DXBC, DXIL, and SPIR-V. Although SXC uses the [QhenkiX](../QhenkiX) library, it can be used on its own as a separate tool.
 
 SXC is heavily inspired by [ShaderMake](https://github.com/NVIDIA-RTX/ShaderMake) (MIT License), but with a key difference being that it does not create a individual subprocess for every shader compilation, which should result in lower overhead. 
 
@@ -13,29 +13,27 @@ SXC is heavily inspired by [ShaderMake](https://github.com/NVIDIA-RTX/ShaderMake
 - **Library Profile Support**: Compile DXIL libraries (`lib` / `library`)
 - **Debug Support**: Optional debug information generation
 - **Incremental Rebuilds**: Skips up-to-date shaders by checking file timestamps and include dependencies
-- **Optional SPIR-V Output**: Can emit SPIR-V for SM 6.0+
 
 ## Basic Usage
 
-By default, SXC will use the version of [DXC included with QhenkiX](../QhenkiX/external/DirectXShaderCompiler) and the version of FXC that is installed on the system depending on the shader model. To use a specific DLL, place it in the same directory as SXC.exe.
-
 ```bash
-SXC.exe -c <config_file> -sm <shader_model> -out <output_dir> [options]
+SXC.exe -c <config_file> -sm <shader_model> -ir <DXBC|DXIL|SPIRV> -out <output_dir> [options]
 ```
+
+The output consists of one or more `.slang_blob` files, which is a container holding one or more native shader bytecode variants. 
 
 ### Required Arguments
 
 - `-c, --config-path`: Path to the configuration file
-- `-sm, --shader-model`: Target shader model (`5_0`, `6_0`, `6_1`, `6_2`, `6_3`, `6_4`, `6_5`, `6_6`)
+- `-sm, --shader-model`: Target shader model (`5_0` through `6_9`)
+- `-ir, --output-IR`: Output representation (`DXBC`, `DXIL`, or `SPIRV`)
 - `-out, --output`: Output directory for compiled shaders
 
 ### Optional Arguments
 
-- `-pdb, --pdb-path`: Output directory for PDB debug symbols
 - `-i, --include-path`: Additional include directories (can be specified multiple times)
 - `-g, --global-defines`: Global preprocessor defines for all shaders (can be specified multiple times)
-- `-dbg, --debug-flag`: Enable debug information for all shaders
-- `-spirv, --output-spirv`: Emit SPIR-V output (requires shader model 6.0 or higher)
+- `-dbg, --embed-debug`: Embed target-native debug information in all shaders
 - `-f, --force`: Force recompilation of shaders even if up-to-date
 - `-o, --optimization`: Default optimization level (O0, O1, O2, O3) [default: O3]
 
@@ -51,7 +49,7 @@ The configuration file contains one shader compilation job per line. Each line s
 
 ### Configuration Parameters
 
-- `-p, --path`: Path to the HLSL shader file
+- `-p, --path`: Path to a native `.slang` or compatible `.hlsl` shader file
 - `-e, --entry-point`: Shader entry point function name (required for non-library shader types)
 - `-st, --shader-type`: Shader type (`vs`, `ps`, `cs`, `lib`)
 - `-out, --output-dir`: Override global output directory for this shader
@@ -63,7 +61,7 @@ The configuration file contains one shader compilation job per line. Each line s
 SXC supports generating multiple shader variants using define permutations:
 
 ```
--p shader.hlsl -e main -st vs -d FEATURE_A={0,1} -d FEATURE_B={0,1}
+-p shader.slang -e main -st vs -d FEATURE_A={0,1} -d FEATURE_B={0,1}
 ```
 
 This will generate 4 shader variants:
@@ -74,25 +72,26 @@ This will generate 4 shader variants:
 
 All shader permutations are compiled and written to a single binary file. There is an additional `.meta` file generated to track permutation changes for incremental rebuild decisions.
 
-To read specific permutations at runtime, use the `find_permutation_in_blob()` function from `qhenki/utility/shader_blob.h`. This function allows you to query a permutation by its defines and returns a pointer to the compiled shader bytecode. `shader_blob.h` is part of QhenkiX but can be used as a standalone header, so if you wish to only use SXC you can just copy the file into your project.
+To select a permutation at runtime, call `ShaderBlob::find_shader()` with its requested defines. `shader_blob.h` is part of QhenkiX but can be copied and used as a standalone header.
 
 ## Example
 
 ### Configuration File (`shaders.config`)
 ```
--p basic_vs.hlsl -e main -st vs
--p basic_ps.hlsl -e main -st ps -d USE_TEXTURE={0,1}
--p compute.hlsl -e CSMain -st cs -o O2
--p raytracing_lib.hlsl -st lib
+-p basic_vs.slang -e main -st vs
+-p basic_ps.slang -e main -st ps -d USE_TEXTURE={0,1}
+-p compute.slang -e CSMain -st cs -o O2
+-p raytracing_lib.slang -st lib
 ```
 
 ### Command Line
 ```bash
-SXC.exe -c shaders.config -sm 6_0 -out compiled_shaders -i include_dir -g GLOBAL_DEFINE=1
+SXC.exe -c shaders.config -sm 6_0 -ir DXIL -out compiled_shaders -i include_dir -g GLOBAL_DEFINE=1
 ```
 
 ## Dependencies
 
 - [QhenkiX](https://github.com/AaronTian-stack/QhenkiX) - MIT License
+- [Slang](https://github.com/shader-slang/slang) - Apache 2.0 with LLVM Exception
 - [oneTBB](https://github.com/uxlfoundation/oneTBB) - Apache 2.0 License
 - [argparse](https://github.com/p-ranav/argparse) - MIT License

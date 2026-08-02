@@ -16,17 +16,14 @@
 
 #include <argparse/argparse.hpp>
 
-#include "graphics/d3d12/dxc_shader_compiler.h"
-#if defined(_WIN32) || defined(_WIN64)
-#include "graphics/d3d11/fxc_shader_compiler.h"
-#endif
+#include "graphics/shared/slang_shader_compiler.h"
 
-#include "qhenki/utility/file_util.h"
 #include "qhenki/utility/shader_blob.h"
 #include "qhenki/utility/shader_model_util.h"
 
 
 using namespace qhenki::sxc;
+using namespace qhenki::gfx;
 using namespace qhenki::util;
 
 namespace
@@ -155,14 +152,16 @@ bool needs_to_recompile_shader(const fs::path& input_path,
                                const fs::path& output_path,
                                const std::span<const std::string> include_paths,
                                const CompilerInputVector& inputs,
-                               bool force)
+                               const bool force)
 {
     if (force || !fs::exists(output_path))
     {
         return true;
     }
 
-    // Check meta file for permutated shaders
+    // We only check file date and meta file. If something is wrong or does not match I expect user will force recompile
+
+    // Check that the permutation hash file exists
     if (inputs.size() > 1)
     {
         fs::path meta_path = output_path.parent_path() / input_path.stem();
@@ -174,7 +173,6 @@ bool needs_to_recompile_shader(const fs::path& input_path,
             return true; // Missing or hash mismatch
         }
     }
-
     tsl::robin_set<fs::path> visited;
     const auto latest_input_time = get_most_recent_time(input_path, visited, include_paths);
     const auto output_time = fs::last_write_time(output_path);
@@ -188,7 +186,7 @@ bool needs_to_recompile_shader(const fs::path& input_path,
 }
 
 bool write_shader_blob(const fs::path& output_path,
-                       const tbb::concurrent_vector<CompilerOutput>& outputs,
+                       const std::vector<CompilerOutput>& outputs,
                        const CompilerInputVector& inputs)
 {
     std::ofstream out(output_path, std::ios::binary);
@@ -223,10 +221,9 @@ bool write_shader_blob(const fs::path& output_path,
     {
         const auto& co = outputs[i];
         const auto defines = inputs[i].get_defines();
-
         ShaderBlobEntry entry{
             .offset = data_offset,
-            .size = co.blob->GetBufferSize(),
+            .size = co.blob->getBufferSize(),
             .define_count = static_cast<uint32_t>(defines.size()),
         };
         out.write(reinterpret_cast<const char*>(&entry), sizeof(entry));
@@ -237,18 +234,22 @@ bool write_shader_blob(const fs::path& output_path,
             out.write(def.c_str(), def.size() + 1); // Include null terminator
         }
 
-        data_offset += co.blob->GetBufferSize();
+        data_offset += co.blob->getBufferSize();
     }
 
     for (const auto& co : outputs)
     {
-        assert(co.blob->GetBufferSize() <= std::numeric_limits<std::streamsize>::max());
-        out.write(static_cast<const char*>(co.blob->GetBufferPointer()), co.blob->GetBufferSize());
+        out.write(static_cast<const char*>(co.blob->getBufferPointer()), co.blob->getBufferSize());
     }
 
     if (!out.good())
     {
         return false;
+    }
+
+    if (inputs.size() == 1)
+    {
+        return true;
     }
 
     // Write meta file containing the defines hash
@@ -261,39 +262,38 @@ bool write_shader_blob(const fs::path& output_path,
 
 } // namespace
 
-qhenki::gfx::ShaderType SXCJob::to_shader_type(const char* str)
+ShaderType SXCJob::to_shader_type(const char* str)
 {
-    // Support traditional stages and DXIL library (lib)
     if (strcmp(str, "vs") == 0)
     {
-        return gfx::ShaderType::VERTEX_SHADER;
+        return VERTEX_SHADER;
     }
     if (strcmp(str, "ps") == 0)
     {
-        return gfx::ShaderType::PIXEL_SHADER;
+        return PIXEL_SHADER;
     }
     if (strcmp(str, "cs") == 0)
     {
-        return gfx::ShaderType::COMPUTE_SHADER;
+        return COMPUTE_SHADER;
     }
     if (strcmp(str, "lib") == 0 || strcmp(str, "library") == 0)
     {
-        return gfx::ShaderType::LIBRARY_SHADER;
+        return LIBRARY_SHADER;
     }
     throw std::runtime_error("Unknown shader type");
 }
 
-const char* SXCJob::shader_type_to_str(const gfx::ShaderType type)
+const char* SXCJob::shader_type_to_str(const ShaderType type)
 {
     switch (type)
     {
-    case gfx::ShaderType::VERTEX_SHADER:
+    case VERTEX_SHADER:
         return "_vs_";
-    case gfx::ShaderType::PIXEL_SHADER:
+    case PIXEL_SHADER:
         return "_ps_";
-    case gfx::ShaderType::COMPUTE_SHADER:
+    case COMPUTE_SHADER:
         return "_cs_";
-    case gfx::ShaderType::LIBRARY_SHADER:
+    case LIBRARY_SHADER:
         return "_lib_";
     }
     throw std::runtime_error("Unknown shader type");
@@ -326,7 +326,7 @@ int SXCJob::parse_config(const CLIInput& input,
         }
     }
 
-    tbb::concurrent_vector<std::pair<int, std::string>> parse_errors;
+    tbb::concurrent_vector<std::pair<size_t, std::string>> parse_errors;
 
     tbb::parallel_for(
         static_cast<size_t>(0),
@@ -334,11 +334,10 @@ int SXCJob::parse_config(const CLIInput& input,
         [&](size_t i)
         {
             CompilerInput compiler_input{
-                .pdb_path = input.pdb_dir,
                 .includes = input.include_paths,
                 .shader_model = input.shader_model,
                 // shader type determined below
-                .flags = input.debug_flag ? CompilerInput::ShaderFlags::DEBUG : CompilerInput::ShaderFlags::NONE,
+                .flags = input.embed_debug ? CompilerInput::ShaderFlags::DEBUG : CompilerInput::ShaderFlags::NONE,
                 .optimization = input.optimization, // May be overridden by config
             };
 
@@ -363,7 +362,7 @@ int SXCJob::parse_config(const CLIInput& input,
 
                 // Enforce entry-point for non-library shaders
                 const auto ep_present = program.present<std::string>("--entry-point");
-                if (compiler_input.shader_type != gfx::ShaderType::LIBRARY_SHADER && !ep_present.has_value())
+                if (compiler_input.shader_type != LIBRARY_SHADER && !ep_present.has_value())
                 {
                     throw std::runtime_error("-e: required.");
                 }
@@ -472,7 +471,7 @@ int SXCJob::parse_config(const CLIInput& input,
 
     for (const auto& error : parse_errors)
     {
-        fprintf(stderr, "Failed to parse config line: %d\n\t%s\n", error.first, error.second.c_str());
+        fprintf(stderr, "Failed to parse config line: %llu\n\t%s\n", error.first, error.second.c_str());
     }
     return parse_errors.empty() ? 0 : -1;
 }
@@ -480,9 +479,9 @@ int SXCJob::parse_config(const CLIInput& input,
 fs::path SXCJob::get_resolved_output_name(const OutputInfo& info,
                                           const fs::path& input_path,
                                           const std::string& output_dir,
-                                          const size_t permutation_count)
+                                          const ShaderIR ir_format)
 {
-    // Appends something like _vs_5_0_main.dxil
+    // SXC always writes a .slang_blob container even for single variant shaders
     fs::path filename = input_path.filename();
     if (filename.has_extension())
     {
@@ -495,47 +494,27 @@ fs::path SXCJob::get_resolved_output_name(const OutputInfo& info,
     assert(!sm.empty());
 
     filename += sm.substr(sm.find('_') + 1);
-    // For DXIL libraries, skip appending an entry point name
-    if (info.st != gfx::ShaderType::LIBRARY_SHADER)
+
+    // Library profiles contain multiple entry points so none is appended here.
+    if (info.st != LIBRARY_SHADER)
     {
         filename += "_";
         filename += info.entry_point;
     }
 
-    if (info.output_spirv)
+    switch (ir_format)
     {
-        if (permutation_count > 1)
-        {
-            filename += ".spv_blob";
-        }
-        else
-        {
-            filename += ".spv";
-        }
-        return fs::path(output_dir) / filename;
-    }
-
-    if (permutation_count > 1)
-    {
-        if (info.sm > gfx::ShaderModel::SM_5_0)
-        {
-            filename += ".dxil_blob";
-        }
-        else
-        {
-            filename += ".dxbc_blob";
-        }
-    }
-    else
-    {
-        if (info.sm > gfx::ShaderModel::SM_5_0)
-        {
-            filename += ".dxil";
-        }
-        else
-        {
-            filename += ".dxbc";
-        }
+    case ShaderIR::DXBC:
+        filename += ".dxbc_blob";
+        break;
+    case ShaderIR::DXIL:
+        filename += ".dxil_blob";
+        break;
+    case ShaderIR::SPIRV:
+        filename += ".spv_blob";
+        break;
+    default:
+        assert(false);
     }
 
     return fs::path(output_dir) / filename;
@@ -544,7 +523,7 @@ fs::path SXCJob::get_resolved_output_name(const OutputInfo& info,
 ShaderResultCount qhenki::sxc::execute_compilation_job(tbb::concurrent_vector<CompilerInputVector>* inputs,
                                                        const std::string& output_dir,
                                                        bool force,
-                                                       bool output_spirv)
+                                                       ShaderIR ir_format)
 {
     // Go through inputs and just return the same one
     const auto collect_inputs =
@@ -576,8 +555,7 @@ ShaderResultCount qhenki::sxc::execute_compilation_job(tbb::concurrent_vector<Co
     // Check if input needs to be compiled
     const auto filter_shaders = tbb::make_filter<CompilerInputVector*, OutputPathAndCompilerInputVector>(
         tbb::filter_mode::parallel,
-        [&output_dir, &skipped_count, force, output_spirv](
-            CompilerInputVector* input) -> OutputPathAndCompilerInputVector
+        [&output_dir, &skipped_count, force, ir_format](CompilerInputVector* input) -> OutputPathAndCompilerInputVector
         {
             assert(input); // nullptr should have stopped pipeline from last filter
             assert(!input->empty());
@@ -594,10 +572,9 @@ ShaderResultCount qhenki::sxc::execute_compilation_job(tbb::concurrent_vector<Co
                 .sm = ci.shader_model,
                 .st = ci.shader_type,
                 .entry_point = ci.entry_point,
-                .output_spirv = output_spirv,
             };
             const fs::path input_path = ci.get_path();
-            const fs::path output_path = SXCJob::get_resolved_output_name(info, input_path, output_dir, input->size());
+            const fs::path output_path = SXCJob::get_resolved_output_name(info, input_path, output_dir, ir_format);
 
             if (needs_to_recompile_shader(input_path, output_path, ci.includes, *input, force))
             {
@@ -609,77 +586,38 @@ ShaderResultCount qhenki::sxc::execute_compilation_job(tbb::concurrent_vector<Co
             return {};
         });
 
-    using CompilerOutputVector = oneapi::tbb::concurrent_vector<CompilerOutput>;
-
     struct PathAndOutputs
     {
         fs::path path;
-        CompilerOutputVector* output;
+        std::vector<CompilerOutput> output;
         CompilerInputVector* input_vector;
     };
 
-    tbb::enumerable_thread_specific<gfx::DXCShaderCompiler> d3d12_compilers;
-#if defined(_WIN32) || defined(_WIN64)
-    tbb::enumerable_thread_specific<gfx::FXCShaderCompiler> d3d11_compilers;
-#endif
+    tbb::enumerable_thread_specific<SlangShaderCompiler> slang_compilers;
     // Compile shader
     auto compile_shaders = tbb::make_filter<OutputPathAndCompilerInputVector, PathAndOutputs>(
         tbb::filter_mode::parallel,
-        [&d3d12_compilers
-#if defined(_WIN32) || defined(_WIN64)
-         ,
-         &d3d11_compilers
-#endif
-         ,
-         output_spirv](const OutputPathAndCompilerInputVector& out_and_vector) -> PathAndOutputs
+        [&slang_compilers, ir_format](const OutputPathAndCompilerInputVector& out_and_vector) -> PathAndOutputs
         {
             const auto& out_path = out_and_vector.output_path;
             const auto input_vector = out_and_vector.input_vector;
 
             if (!input_vector)
             {
-                return {.path = "", .output = nullptr, .input_vector = nullptr};
+                return {};
             }
 
-            // Select compiler based on shader model
-            ShaderCompiler* compiler;
-            const auto& first_input = input_vector->at(0);
-
-            assert(!(output_spirv && first_input.shader_model < gfx::ShaderModel::SM_6_0));
-            if (!output_spirv && first_input.shader_model < gfx::ShaderModel::SM_6_0)
-            {
-#if defined(_WIN32) || defined(_WIN64)
-                compiler = &d3d11_compilers.local();
-#else
-                compiler = &d3d12_compilers.local();
-#endif
-            }
-            else
-            {
-                compiler = &d3d12_compilers.local();
-            }
-
-            using allocator = oneapi::tbb::tbb_allocator<CompilerOutputVector>;
-
-            allocator alloc;
-            const auto output = alloc.allocate(1);
-            std::allocator_traits<allocator>::construct(alloc, output);
-
-            if (input_vector->size() > 1)
-            {
-                output->reserve(input_vector->size());
-            }
+            std::vector<CompilerOutput> output(input_vector->size());
 
             tbb::parallel_for(static_cast<size_t>(0),
                               input_vector->size(),
-                              [&output, compiler, input_vector, output_spirv](const size_t i)
+                              [&output, &slang_compilers, input_vector, ir_format](const size_t i)
                               {
                                   const auto& input = (*input_vector)[i];
-                                  output->emplace_back();
-                                  auto& out = output->back();
-                                  const auto success = compiler->compile(input, out, output_spirv);
+                                  auto& out = output[i];
+                                  const auto success = slang_compilers.local().compile(input, out, ir_format);
 
-                                  const auto tm = gfx::shader_model_char(input.shader_type, input.shader_model);
+                                  const auto tm = shader_model_char(input.shader_type, input.shader_model);
 
                                   if (success)
                                   {
@@ -698,70 +636,43 @@ ShaderResultCount qhenki::sxc::execute_compilation_job(tbb::concurrent_vector<Co
                                   }
                               });
 
-            return {.path = out_path, .output = output, .input_vector = input_vector};
+            return {.path = out_path, .output = std::move(output), .input_vector = input_vector};
         });
 
     std::atomic_uint64_t succeeded_count{0};
     std::atomic_uint64_t failed_count{0};
-    auto collect_compile_results = tbb::make_filter<PathAndOutputs, void>(
-        tbb::filter_mode::parallel,
-        [&failed_count, &succeeded_count](const PathAndOutputs& pa)
-        {
-            if (pa.output)
-            {
-                bool any_failed = false;
-                for (const auto& co : *pa.output)
-                {
-                    if (!co.error_message.empty())
-                    {
-                        ++failed_count;
-                        any_failed = true;
-                    }
-                    else
-                    {
-                        ++succeeded_count;
-                    }
-                }
+    auto collect_compile_results =
+        tbb::make_filter<PathAndOutputs, void>(tbb::filter_mode::parallel,
+                                               [&failed_count, &succeeded_count](const PathAndOutputs& pa)
+                                               {
+                                                   if (pa.input_vector)
+                                                   {
+                                                       bool any_failed = false;
+                                                       for (const auto& co : pa.output)
+                                                       {
+                                                           if (!co.error_message.empty())
+                                                           {
+                                                               ++failed_count;
+                                                               any_failed = true;
+                                                           }
+                                                           else
+                                                           {
+                                                               ++succeeded_count;
+                                                           }
+                                                       }
 
-                if (!any_failed)
-                {
-                    if (pa.output->size() == 1)
-                    {
-                        const auto& co = pa.output->at(0);
-                        if (!co.blob || co.blob->GetBufferSize() == 0 || co.blob->GetBufferPointer() == nullptr)
-                        {
-                            printf("0 byte shader output: %s\n", pa.path.string().c_str());
-                            ++failed_count;
-                            --succeeded_count;
-                        }
-                        else if (!write_file(pa.path.c_str(), co.blob->GetBufferPointer(), co.blob->GetBufferSize()))
-                        {
-                            printf("Failed to write shader to file: %s\n", pa.path.string().c_str());
-                            ++failed_count;
-                            --succeeded_count;
-                        }
-                    }
-                    else
-                    {
-                        if (!write_shader_blob(pa.path, *pa.output, *pa.input_vector))
-                        {
-                            printf("Failed to write shader blob to file: %s\n", pa.path.string().c_str());
-                            failed_count += pa.output->size();
-                            succeeded_count -= pa.output->size();
-                        }
-                    }
-                    for (const auto& co : *pa.output)
-                    {
-                        if (co.blob)
-                        {
-                            co.blob->Release();
-                        }
-                    }
-                }
-
-                oneapi::tbb::tbb_allocator<CompilerOutputVector>().deallocate(pa.output, 1);
-            }
-        });
+                                                       if (!any_failed)
+                                                       {
+                                                           if (!write_shader_blob(pa.path, pa.output, *pa.input_vector))
+                                                           {
+                                                               printf("Failed to write shader blob to file: %s\n",
+                                                                      pa.path.string().c_str());
+                                                               failed_count += pa.output.size();
+                                                               succeeded_count -= pa.output.size();
+                                                           }
+                                                       }
+                                                   }
+                                               });
 
     constexpr auto max_tokens = 2;
     parallel_pipeline(max_tokens, collect_inputs, filter_shaders, compile_shaders, collect_compile_results);
