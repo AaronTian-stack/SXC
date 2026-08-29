@@ -496,7 +496,7 @@ int SXCJob::parse_config(const CLIInput& input,
 
     for (const auto& error : parse_errors)
     {
-        fprintf(stderr, "Failed to parse config line: %llu\n\t%s\n", error.first, error.second.c_str());
+        fprintf(stderr, "Failed to parse config line: %zu\n\t%s\n", error.first, error.second.c_str());
     }
     return parse_errors.empty() ? 0 : -1;
 }
