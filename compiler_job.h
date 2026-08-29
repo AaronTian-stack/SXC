@@ -9,10 +9,9 @@
 
 #include <oneapi/tbb/concurrent_vector.h>
 
-#include <qhenki/rhi/shader.h>
-#include <qhenki/rhi/shader_compiler.h>
+#include <sxc/shader_compiler.h>
 
-namespace qhenki::sxc
+namespace SXC
 {
 namespace fs = std::filesystem;
 
@@ -22,7 +21,7 @@ struct CLIInput
     std::string output_dir;
     std::span<const std::string> global_defines;
     std::span<const std::string> include_paths;
-    gfx::ShaderModel shader_model;
+    ShaderModel shader_model;
     CompilerInput::Optimization optimization;
     bool embed_debug;
     bool force_recompile;
@@ -37,8 +36,8 @@ struct CompilerInputFile
 
 struct OutputInfo
 {
-    gfx::ShaderModel sm;
-    gfx::ShaderType st;
+    ShaderModel sm;
+    ShaderType st;
     std::string_view entry_point;
 };
 
@@ -52,11 +51,11 @@ class SXCJob
         std::string entry_point;
         std::optional<std::vector<std::string>> defines;         // List of range of possible range of values
         std::optional<CompilerInput::Optimization> optimization; // Overrides CLIInput optimization
-        gfx::ShaderType shader_type;
+        ShaderType shader_type;
     };
 
-    static gfx::ShaderType to_shader_type(const char* str);
-    static const char* shader_type_to_str(gfx::ShaderType type);
+    static ShaderType to_shader_type(const char* str);
+    static const char* shader_type_to_str(ShaderType type);
 
 public:
     static fs::path get_resolved_output_name(const OutputInfo& info,
@@ -77,4 +76,4 @@ ShaderResultCount execute_compilation_job(tbb::concurrent_vector<CompilerInputVe
                                           const std::string& output_dir,
                                           bool force,
                                           ShaderIR ir_format);
-} // namespace qhenki::sxc
+} // namespace SXC

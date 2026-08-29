@@ -1,11 +1,13 @@
-#include <qhenki/rhi/shader_compiler.h>
-#include <qhenki/utility/string_util.h>
+#include <sxc/shader_compiler.h>
 #include <argparse/argparse.hpp>
+#include <array>
 #include <cinttypes>
 #include <filesystem>
 #include <magic_enum/magic_enum.hpp>
 #include "compiler_job.h"
-#include "graphics/shared/slang_shader_compiler.h"
+#include "slang_shader_compiler.h"
+
+using namespace SXC;
 
 int main(int argc, char* argv[])
 {
@@ -91,12 +93,13 @@ int main(int argc, char* argv[])
             }
         }
 
-        const auto sm_str = qhenki::util::format_string<7>("SM_%s", program.get<std::string>("--shader-model").c_str());
+        std::array<char, 7> sm_str{};
+        std::snprintf(sm_str.data(), sm_str.size(), "SM_%s", program.get<std::string>("--shader-model").c_str());
 
-        const auto sm = magic_enum::enum_cast<qhenki::gfx::ShaderModel>(sm_str.buffer.data());
+        const auto sm = magic_enum::enum_cast<ShaderModel>(sm_str.data());
         if (!sm.has_value())
         {
-            throw std::runtime_error("Failed to reflect shader model: " + std::string(sm_str.buffer.data()));
+            throw std::runtime_error("Failed to reflect shader model: " + std::string(sm_str.data()));
         }
 
         const auto output_IR = magic_enum::enum_cast<ShaderIR>(program.get<std::string>("--output-IR"));
@@ -105,11 +108,11 @@ int main(int argc, char* argv[])
             throw std::runtime_error("Failed to reflect output type");
         }
 
-        if (output_IR.value() == ShaderIR::DXBC && sm.value() >= qhenki::gfx::ShaderModel::SM_6_0)
+        if (output_IR.value() == ShaderIR::DXBC && sm.value() >= ShaderModel::SM_6_0)
         {
             throw std::runtime_error("DXBC does not support SM >= 6.0");
         }
-        if (output_IR.value() != ShaderIR::DXBC && sm.value() < qhenki::gfx::ShaderModel::SM_6_0)
+        if (output_IR.value() != ShaderIR::DXBC && sm.value() < ShaderModel::SM_6_0)
         {
             throw std::runtime_error("DXIL and SPIR-V require SM >= 6.0");
         }
@@ -122,22 +125,21 @@ int main(int argc, char* argv[])
         }
 
         auto global_defines = program.present<std::vector<std::string>>("--global-defines");
-        qhenki::sxc::CLIInput input{.config_path = std::move(config_file_path),
-                                    .output_dir = program.get<std::string>("--output"),
-                                    .global_defines = global_defines.has_value() ? global_defines.value()
-                                                                                 : std::span<const std::string>{},
-                                    .include_paths = includes.has_value() ? includes.value()
-                                                                          : std::span<const std::string>{},
-                                    .shader_model = sm.value(),
-                                    .optimization = optimization.value(),
-                                    .embed_debug = program.get<bool>("--embed-debug"),
-                                    .force_recompile = program.get<bool>("--force"),
-                                    .output_IR = output_IR.value()};
+        CLIInput input{.config_path = std::move(config_file_path),
+                       .output_dir = program.get<std::string>("--output"),
+                       .global_defines = global_defines.has_value() ? global_defines.value()
+                                                                    : std::span<const std::string>{},
+                       .include_paths = includes.has_value() ? includes.value() : std::span<const std::string>{},
+                       .shader_model = sm.value(),
+                       .optimization = optimization.value(),
+                       .embed_debug = program.get<bool>("--embed-debug"),
+                       .force_recompile = program.get<bool>("--force"),
+                       .output_IR = output_IR.value()};
 
         const auto start = std::chrono::steady_clock::now();
 
-        tbb::concurrent_vector<qhenki::sxc::CompilerInputVector> inputs;
-        const auto num_lines = qhenki::sxc::SXCJob::parse_config(input, &inputs);
+        tbb::concurrent_vector<CompilerInputVector> inputs;
+        const auto num_lines = SXCJob::parse_config(input, &inputs);
         if (num_lines < 0)
         {
             fprintf(stderr, "Failed to parse config file: %s\n", input.config_path.c_str());
@@ -148,7 +150,7 @@ int main(int argc, char* argv[])
 #ifdef __linux__
         static_assert(name_buffer.size() >= PATH_MAX);
 #endif
-        if (qhenki::gfx::SlangShaderCompiler::get_compiler_path(name_buffer.data(), name_buffer.size()))
+        if (SlangShaderCompiler::get_compiler_path(name_buffer.data(), name_buffer.size()))
         {
             printf("Using shader compiler library:\nSlang: %s\n", name_buffer.data());
         }
@@ -158,7 +160,7 @@ int main(int argc, char* argv[])
         }
 
         const auto result_count =
-            qhenki::sxc::execute_compilation_job(&inputs, input.output_dir, input.force_recompile, input.output_IR);
+            execute_compilation_job(&inputs, input.output_dir, input.force_recompile, input.output_IR);
 
         const auto end = std::chrono::steady_clock::now();
 

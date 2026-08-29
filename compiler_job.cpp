@@ -16,18 +16,43 @@
 
 #include <argparse/argparse.hpp>
 
-#include "graphics/shared/slang_shader_compiler.h"
+#include "slang_shader_compiler.h"
 
-#include "qhenki/utility/shader_blob.h"
-#include "qhenki/utility/shader_model_util.h"
+#include "sxc/shader_blob.h"
 
-
-using namespace qhenki::sxc;
-using namespace qhenki::gfx;
-using namespace qhenki::util;
+using namespace SXC;
 
 namespace
 {
+std::string shader_target_name(const ShaderType type, const ShaderModel model)
+{
+    const auto model_name = magic_enum::enum_name(model);
+    assert(model_name.size() == 6);
+
+    if (type == LIBRARY_SHADER)
+    {
+        return "lib" + std::string(model_name.substr(model_name.find('_')));
+    }
+
+    auto target_name = std::string(model_name);
+    target_name[1] = 's';
+    switch (type)
+    {
+    case VERTEX_SHADER:
+        target_name[0] = 'v';
+        break;
+    case PIXEL_SHADER:
+        target_name[0] = 'p';
+        break;
+    case COMPUTE_SHADER:
+        target_name[0] = 'c';
+        break;
+    case LIBRARY_SHADER:
+        break;
+    }
+    return target_name;
+}
+
 std::string compute_defines_hash(const CompilerInputVector& inputs)
 {
     constexpr std::hash<std::string> hasher;
@@ -520,10 +545,10 @@ fs::path SXCJob::get_resolved_output_name(const OutputInfo& info,
     return fs::path(output_dir) / filename;
 }
 
-ShaderResultCount qhenki::sxc::execute_compilation_job(tbb::concurrent_vector<CompilerInputVector>* inputs,
-                                                       const std::string& output_dir,
-                                                       bool force,
-                                                       ShaderIR ir_format)
+ShaderResultCount SXC::execute_compilation_job(tbb::concurrent_vector<CompilerInputVector>* inputs,
+                                               const std::string& output_dir,
+                                               bool force,
+                                               ShaderIR ir_format)
 {
     // Go through inputs and just return the same one
     const auto collect_inputs =
@@ -615,9 +640,9 @@ ShaderResultCount qhenki::sxc::execute_compilation_job(tbb::concurrent_vector<Co
                               {
                                   const auto& input = (*input_vector)[i];
                                   auto& out = output[i];
-                                  const auto success = slang_compilers.local().compile(input, out, ir_format);
+                                  const auto success = slang_compilers.local().compile(input, &out, ir_format);
 
-                                  const auto tm = shader_model_char(input.shader_type, input.shader_model);
+                                  const auto tm = shader_target_name(input.shader_type, input.shader_model);
 
                                   if (success)
                                   {

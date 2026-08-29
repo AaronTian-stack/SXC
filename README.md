@@ -1,6 +1,6 @@
 # SXC - Standalone Shader Compiler
 
-SXC (Shader eXecution Compiler) is a command line tool for batch compilation of Slang HLSL shaders, acting as a frontend for [Slang](https://github.com/shader-slang/slang) to produce DXBC, DXIL, and SPIR-V. Although SXC uses the [QhenkiX](../QhenkiX) library, it can be used on its own as a separate tool.
+SXC (Shader eXecution Compiler) is a standalone command line tool for batch compilation of Slang HLSL shaders, acting as a frontend for [Slang](https://github.com/shader-slang/slang) to produce DXBC, DXIL, and SPIR-V.
 
 SXC is heavily inspired by [ShaderMake](https://github.com/NVIDIA-RTX/ShaderMake) (MIT License), but with a key difference being that it does not create a individual subprocess for every shader compilation, which should result in lower overhead. 
 
@@ -72,7 +72,30 @@ This will generate 4 shader variants:
 
 All shader permutations are compiled and written to a single binary file. There is an additional `.meta` file generated to track permutation changes for incremental rebuild decisions.
 
-To select a permutation at runtime, call `ShaderBlob::find_shader()` with its requested defines. `shader_blob.h` is part of QhenkiX but can be copied and used as a standalone header.
+To select a permutation at runtime, call `SXC::ShaderBlob::find_shader()` with its requested defines. The self-contained reader is available at `include/sxc/shader_blob.h` and does not depend on QhenkiX.
+
+## SDK package
+
+Build and install SXC to create a platform-specific SDK containing the compiler, its runtime libraries, the shader blob reader, and CMake package metadata:
+
+```bash
+cmake --install build --config Release --prefix sdk
+```
+
+CMake consumers can then set `SXC_ROOT` to that `sdk` directory and load the exported `SXC::Compiler` and `SXC::ShaderBlob` targets with `find_package(SXC CONFIG)`.
+
+## Building
+
+Clone recursively so the pinned Slang dependency is available, then configure and build with CMake:
+
+```bash
+git clone --recurse-submodules https://github.com/AaronTian-stack/SXC.git
+cd SXC
+cmake --preset windows-release
+cmake --build build --config Release --target SXC --parallel
+```
+
+On Linux, use the `linux-release` preset. SXC requires CMake 3.21 or newer and a C++20 compiler. The repository includes the header-only dependencies and platform oneTBB packages used by SXC.
 
 ## Example
 
@@ -91,7 +114,9 @@ SXC.exe -c shaders.config -sm 6_0 -ir DXIL -out compiled_shaders -i include_dir 
 
 ## Dependencies
 
-- [QhenkiX](https://github.com/AaronTian-stack/QhenkiX) - MIT License
 - [Slang](https://github.com/shader-slang/slang) - Apache 2.0 with LLVM Exception
 - [oneTBB](https://github.com/uxlfoundation/oneTBB) - Apache 2.0 License
 - [argparse](https://github.com/p-ranav/argparse) - MIT License
+- [Boost.Container](https://github.com/boostorg/container) - Boost Software License 1.0
+- [magic_enum](https://github.com/Neargye/magic_enum) - MIT License
+- [robin-map / tsl](https://github.com/Tessil/robin-map) - MIT License
