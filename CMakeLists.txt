@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.21)
-project(SXC VERSION 0.5.0 LANGUAGES CXX)
+project(SXC VERSION 0.5.1 LANGUAGES CXX)
 
 set_property(GLOBAL PROPERTY USE_FOLDERS ON)
 include(CMakePackageConfigHelpers)
@@ -48,8 +48,10 @@ target_link_libraries(SXC PRIVATE TBB::tbb ${SXC_SLANG_LINK_TARGET})
 
 if(APPLE)
     set_property(TARGET SXC APPEND PROPERTY BUILD_RPATH "@loader_path")
+    set_property(TARGET SXC APPEND PROPERTY INSTALL_RPATH "@loader_path")
 elseif(UNIX)
     set_property(TARGET SXC APPEND PROPERTY BUILD_RPATH "$ORIGIN")
+    set_property(TARGET SXC APPEND PROPERTY INSTALL_RPATH "$ORIGIN")
     target_link_libraries(SXC PRIVATE dl)
 endif()
 
