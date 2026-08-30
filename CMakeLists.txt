@@ -96,12 +96,24 @@ install(TARGETS SXC SXCShaderBlob
 install(FILES include/sxc/shader_blob.h
     DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/sxc
 )
-install(DIRECTORY "$<TARGET_FILE_DIR:SXC>/"
+
+set(SXC_RUNTIME_FILES
+    $<TARGET_FILE:${SXC_SLANG_LINK_TARGET}>
+    ${SXC_SLANG_GLSLANG_FILE}
+    $<TARGET_FILE:TBB::tbb>
+)
+if(WIN32)
+    list(APPEND SXC_RUNTIME_FILES
+        "${SXC_SLANG_BINARIES_DIR}/dxcompiler.dll"
+        "${SXC_SLANG_BINARIES_DIR}/dxil.dll"
+    )
+    if(EXISTS "${SXC_SLANG_BINARIES_DIR}/d3dcompiler_47.dll")
+        list(APPEND SXC_RUNTIME_FILES
+            "${SXC_SLANG_BINARIES_DIR}/d3dcompiler_47.dll")
+    endif()
+endif()
+install(FILES ${SXC_RUNTIME_FILES}
     DESTINATION ${CMAKE_INSTALL_BINDIR}
-    FILES_MATCHING
-        PATTERN "*.dll"
-        PATTERN "*.so*"
-        PATTERN "*.dylib"
 )
 
 configure_package_config_file(
