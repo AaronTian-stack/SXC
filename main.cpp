@@ -11,7 +11,7 @@ using namespace SXC;
 
 int main(int argc, char* argv[])
 {
-    argparse::ArgumentParser program("SXC", "0.5.0");
+    argparse::ArgumentParser program("SXC", SXC_VERSION);
     program.add_description("Slang batch shader compiler.");
 #if defined(_WIN32) || defined(_WIN64)
     program.set_prefix_chars("-+/");

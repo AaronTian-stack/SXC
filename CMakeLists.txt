@@ -39,6 +39,7 @@ add_executable(SXC::Compiler ALIAS SXC)
 set_target_properties(SXC PROPERTIES EXPORT_NAME Compiler)
 
 target_compile_features(SXC PRIVATE cxx_std_20)
+target_compile_definitions(SXC PRIVATE SXC_VERSION="${PROJECT_VERSION}")
 target_include_directories(SXC PRIVATE
     "${CMAKE_CURRENT_SOURCE_DIR}/include"
     "${CMAKE_CURRENT_SOURCE_DIR}/src"
@@ -102,7 +103,7 @@ install(FILES include/sxc/shader_blob.h
 set(SXC_RUNTIME_FILES
     $<TARGET_FILE:${SXC_SLANG_LINK_TARGET}>
     ${SXC_SLANG_GLSLANG_FILE}
-    $<TARGET_FILE:TBB::tbb>
+    $<TARGET_FILE_DIR:SXC>/$<TARGET_FILE_NAME:TBB::tbb>
 )
 if(WIN32)
     list(APPEND SXC_RUNTIME_FILES
