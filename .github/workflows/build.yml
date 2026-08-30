@@ -19,6 +19,7 @@ jobs:
   build:
     needs: format
     strategy:
+      fail-fast: false
       matrix:
         include:
           - os: windows-latest
