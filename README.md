@@ -72,7 +72,7 @@ This will generate 4 shader variants:
 
 All shader permutations are compiled and written to a single binary file. There is an additional `.meta` file generated to track permutation changes for incremental rebuild decisions.
 
-To select a permutation at runtime, call `SXC::ShaderBlob::find_shader()` with its requested defines. The self-contained reader is available at `include/sxc/shader_blob.h` and does not depend on QhenkiX.
+To select a permutation at runtime, call `SXC::ShaderBlob::find_shader()` with its requested defines. The self-contained reader is available at `include/shader_blob.h` and does not depend on QhenkiX.
 
 ## SDK package
 

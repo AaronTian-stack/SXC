@@ -18,7 +18,7 @@
 
 #include "slang_shader_compiler.h"
 
-#include "sxc/shader_blob.h"
+#include "shader_blob.h"
 
 using namespace SXC;
 

@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.21)
-project(SXC VERSION 0.5.1 LANGUAGES CXX)
+project(SXC VERSION 0.6.0 LANGUAGES CXX)
 
 set_property(GLOBAL PROPERTY USE_FOLDERS ON)
 include(CMakePackageConfigHelpers)
@@ -32,8 +32,8 @@ add_executable(SXC
     compiler_job.h
     src/slang_shader_compiler.cpp
     src/slang_shader_compiler.h
-    include/sxc/shader_blob.h
-    include/sxc/shader_compiler.h
+    include/shader_blob.h
+    include/shader_compiler.h
 )
 add_executable(SXC::Compiler ALIAS SXC)
 set_target_properties(SXC PROPERTIES EXPORT_NAME Compiler)
@@ -96,8 +96,8 @@ install(TARGETS SXC SXCShaderBlob
     EXPORT SXCTargets
     RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR}
 )
-install(FILES include/sxc/shader_blob.h
-    DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/sxc
+install(FILES include/shader_blob.h
+    DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}
 )
 
 set(SXC_RUNTIME_FILES

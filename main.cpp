@@ -1,4 +1,4 @@
-#include <sxc/shader_compiler.h>
+#include <shader_compiler.h>
 #include <argparse/argparse.hpp>
 #include <array>
 #include <cinttypes>
