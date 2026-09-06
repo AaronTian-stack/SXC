@@ -75,13 +75,6 @@ if(WIN32)
             $<TARGET_FILE_DIR:SXC>
     )
     sxc_stage_dxc_runtime(SXC)
-    if(EXISTS "${SXC_SLANG_BINARIES_DIR}/d3dcompiler_47.dll")
-        add_custom_command(TARGET SXC POST_BUILD
-            COMMAND ${CMAKE_COMMAND} -E copy_if_different
-                "${SXC_SLANG_BINARIES_DIR}/d3dcompiler_47.dll"
-                $<TARGET_FILE_DIR:SXC>
-        )
-    endif()
 elseif(UNIX)
     add_custom_command(TARGET SXC POST_BUILD
         COMMAND ${CMAKE_COMMAND} -E copy_if_different
@@ -110,10 +103,6 @@ if(WIN32)
         "${SXC_SLANG_BINARIES_DIR}/dxcompiler.dll"
         "${SXC_SLANG_BINARIES_DIR}/dxil.dll"
     )
-    if(EXISTS "${SXC_SLANG_BINARIES_DIR}/d3dcompiler_47.dll")
-        list(APPEND SXC_RUNTIME_FILES
-            "${SXC_SLANG_BINARIES_DIR}/d3dcompiler_47.dll")
-    endif()
 endif()
 install(FILES ${SXC_RUNTIME_FILES}
     DESTINATION ${CMAKE_INSTALL_BINDIR}

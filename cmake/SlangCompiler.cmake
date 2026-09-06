@@ -6,21 +6,6 @@ if(NOT EXISTS "${SXC_SLANG_SOURCE_DIR}/CMakeLists.txt")
         "Slang submodule is missing. Run: git submodule update --init --recursive")
 endif()
 
-if(WIN32)
-    set(SXC_SLANG_BINARIES_ROOT
-        "${SXC_SLANG_SOURCE_DIR}/external/slang-binaries/bin")
-    if(CMAKE_GENERATOR_PLATFORM MATCHES "^[Aa][Rr][Mm]64$"
-       OR CMAKE_SYSTEM_PROCESSOR MATCHES "^(ARM64|arm64|aarch64)$")
-        set(SXC_SLANG_BINARIES_DIR "${SXC_SLANG_BINARIES_ROOT}/windows-aarch64")
-    elseif(CMAKE_SIZEOF_VOID_P EQUAL 8)
-        set(SXC_SLANG_BINARIES_DIR "${SXC_SLANG_BINARIES_ROOT}/windows-x64")
-    elseif(CMAKE_SIZEOF_VOID_P EQUAL 4)
-        set(SXC_SLANG_BINARIES_DIR "${SXC_SLANG_BINARIES_ROOT}/windows-x86")
-    else()
-        message(FATAL_ERROR "Slang: Unsupported Windows target architecture")
-    endif()
-endif()
-
 set(SXC_SLANG_OPTIONS
     "-DSLANG_ENABLE_CUDA=OFF"
     "-DSLANG_ENABLE_OPTIX=OFF"
@@ -36,7 +21,7 @@ set(SXC_SLANG_OPTIONS
     "-DSLANG_ENABLE_TESTS=OFF"
     "-DSLANG_ENABLE_EXAMPLES=OFF"
     "-DSLANG_ENABLE_REPLAYER=OFF"
-    "-DSLANG_ENABLE_PREBUILT_BINARIES=ON"
+    "-DSLANG_ENABLE_DXIL=ON"
     "-DSLANG_EXCLUDE_DAWN=ON"
     "-DSLANG_EXCLUDE_TINT=ON"
     "-DSLANG_SLANG_LLVM_FLAVOR=DISABLE"
@@ -51,6 +36,8 @@ if(CMAKE_GENERATOR MATCHES "^Visual Studio")
         -B "${SXC_SLANG_BINARY_DIR}"
         -G "${CMAKE_GENERATOR}"
         "-DCMAKE_POLICY_DEFAULT_CMP0141=NEW"
+        "-DCMAKE_C_FLAGS=/MP"
+        "-DCMAKE_CXX_FLAGS=/MP"
         ${SXC_SLANG_OPTIONS}
     )
     if(CMAKE_GENERATOR_PLATFORM)
@@ -88,7 +75,7 @@ if(CMAKE_GENERATOR MATCHES "^Visual Studio")
     add_custom_target(sxc_slang_build
         COMMAND "${CMAKE_COMMAND}" --build "${SXC_SLANG_BINARY_DIR}"
             --config $<CONFIG>
-            --target slang slang-glslang
+            --target slang slang-glslang copy-dxcompiler copy-dxil
             --parallel
         COMMENT "Building the Slang compiler dependency"
         VERBATIM
@@ -98,6 +85,7 @@ if(CMAKE_GENERATOR MATCHES "^Visual Studio")
     set(SXC_SLANG_LINK_TARGET sxc_slang)
     set(SXC_SLANG_GLSLANG_FILE
         "${SXC_SLANG_BINARY_DIR}/$<CONFIG>/bin/slang-glslang.dll")
+    set(SXC_SLANG_BINARIES_DIR "${SXC_SLANG_BINARY_DIR}/$<CONFIG>/bin")
 else()
     set(SLANG_ENABLE_CUDA OFF CACHE BOOL "" FORCE)
     set(SLANG_ENABLE_OPTIX OFF CACHE BOOL "" FORCE)
@@ -113,7 +101,7 @@ else()
     set(SLANG_ENABLE_TESTS OFF CACHE BOOL "" FORCE)
     set(SLANG_ENABLE_EXAMPLES OFF CACHE BOOL "" FORCE)
     set(SLANG_ENABLE_REPLAYER OFF CACHE BOOL "" FORCE)
-    set(SLANG_ENABLE_PREBUILT_BINARIES ON CACHE BOOL "" FORCE)
+    set(SLANG_ENABLE_DXIL ON CACHE BOOL "" FORCE)
     set(SLANG_EXCLUDE_DAWN ON CACHE BOOL "" FORCE)
     set(SLANG_EXCLUDE_TINT ON CACHE BOOL "" FORCE)
     set(SLANG_SLANG_LLVM_FLAVOR DISABLE CACHE STRING "" FORCE)
@@ -126,6 +114,11 @@ else()
     )
     set(SXC_SLANG_LINK_TARGET slang)
     set(SXC_SLANG_GLSLANG_FILE "$<TARGET_FILE:slang-glslang>")
+    if(WIN32)
+        add_dependencies(slang copy-dxcompiler copy-dxil)
+        set(SXC_SLANG_BINARIES_DIR
+            "${CMAKE_BINARY_DIR}/external/slang/$<CONFIG>/bin")
+    endif()
 endif()
 
 function(sxc_stage_dxc_runtime TARGET_NAME)
@@ -134,13 +127,6 @@ function(sxc_stage_dxc_runtime TARGET_NAME)
             "${SXC_SLANG_BINARIES_DIR}/dxcompiler.dll"
             "${SXC_SLANG_BINARIES_DIR}/dxil.dll"
         )
-        foreach(_sxc_dxc_runtime_file IN LISTS _sxc_dxc_runtime_files)
-            if(NOT EXISTS "${_sxc_dxc_runtime_file}")
-                message(FATAL_ERROR
-                    "Slang's pinned DXC runtime is missing: ${_sxc_dxc_runtime_file}")
-            endif()
-        endforeach()
-
         add_custom_command(TARGET ${TARGET_NAME} POST_BUILD
             COMMAND ${CMAKE_COMMAND} -E copy_if_different
                 ${_sxc_dxc_runtime_files}
