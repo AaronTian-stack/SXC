@@ -3,6 +3,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <cstring>
+#include <span>
 
 namespace SXC
 {
@@ -11,11 +12,7 @@ namespace SXC
 // [Entry0][Define0_0\0][Define0_1\0]...[EntryN][DefineN_*\0]
 // [Shader0Bytecode][Shader1Bytecode]...[ShaderNBytecode]
 
-struct ShaderView
-{
-    void* data;
-    size_t size;
-};
+using ShaderView = std::span<std::byte>;
 
 struct ShaderBlobHeader
 {
@@ -51,7 +48,7 @@ public:
                             const char* const* defines = nullptr,
                             const uint32_t define_count = 0)
     {
-        if (!out_shader || !blob.data || blob.size < sizeof(ShaderBlobHeader) || (!defines && define_count != 0))
+        if (!out_shader || !blob.data() || blob.size() < sizeof(ShaderBlobHeader) || (!defines && define_count != 0))
         {
             return false;
         }
@@ -64,8 +61,8 @@ public:
             }
         }
 
-        auto* const base = static_cast<std::byte*>(blob.data);
-        const auto* const end = base + blob.size;
+        auto* const base = blob.data();
+        const auto* const end = base + blob.size();
         ShaderBlobHeader header{};
         std::memcpy(&header, base, sizeof(header));
         if (header.magic != SHADER_BLOB_MAGIC || header.version != SHADER_BLOB_VERSION)
@@ -150,15 +147,12 @@ private:
     static bool set_shader_view(const ShaderView& blob, const ShaderBlobEntry& entry, ShaderView* const out_shader)
     {
         const auto shader_end = entry.offset + entry.size;
-        if (entry.offset > blob.size || shader_end < entry.offset || shader_end > blob.size)
+        if (entry.offset > blob.size() || shader_end < entry.offset || shader_end > blob.size())
         {
             return false;
         }
 
-        *out_shader = {
-            .data = static_cast<std::byte*>(blob.data) + static_cast<size_t>(entry.offset),
-            .size = static_cast<size_t>(entry.size),
-        };
+        *out_shader = blob.subspan(static_cast<size_t>(entry.offset), static_cast<size_t>(entry.size));
         return true;
     }
 };
