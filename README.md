@@ -20,7 +20,7 @@ SXC is heavily inspired by [ShaderMake](https://github.com/NVIDIA-RTX/ShaderMake
 SXC.exe -c <config_file> -sm <shader_model> -ir <DXBC|DXIL|SPIRV> -out <output_dir> [options]
 ```
 
-The output consists of one or more `.slang_blob` files, which is a container holding one or more native shader bytecode variants. 
+The output consists of one or more container files, each holding one or more native shader bytecode variants. The file extension depends on the selected `-ir` target: `.dxbc_blob` for `DXBC`, `.dxil_blob` for `DXIL`, and `.spv_blob` for `SPIRV`.
 
 ### Required Arguments
 
