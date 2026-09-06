@@ -23,13 +23,21 @@ jobs:
       matrix:
         include:
           - os: windows-latest
+            preset: windows-debug
+            config: Debug
+            artifact: sxc-sdk-windows-debug
+          - os: windows-latest
             preset: windows-release
             config: Release
-            artifact: sxc-sdk-windows
+            artifact: sxc-sdk-windows-release
+          - os: ubuntu-24.04
+            preset: linux-debug
+            config: Debug
+            artifact: sxc-sdk-linux-debug
           - os: ubuntu-24.04
             preset: linux-release
             config: Release
-            artifact: sxc-sdk-linux
+            artifact: sxc-sdk-linux-release
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
