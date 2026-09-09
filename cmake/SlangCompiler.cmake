@@ -72,7 +72,15 @@ if(CMAKE_GENERATOR MATCHES "^Visual Studio")
             "${SXC_SLANG_BINARY_DIR}/${SXC_SLANG_CONFIG}/bin/slang-compiler.dll")
     endforeach()
 
-    add_custom_target(sxc_slang_build
+    set(SXC_SLANG_BUILD_OUTPUTS
+        "${SXC_SLANG_BINARY_DIR}/$<CONFIG>/bin/slang-compiler.dll"
+        "${SXC_SLANG_BINARY_DIR}/$<CONFIG>/bin/slang-glslang.dll"
+        "${SXC_SLANG_BINARY_DIR}/$<CONFIG>/bin/dxcompiler.dll"
+        "${SXC_SLANG_BINARY_DIR}/$<CONFIG>/bin/dxil.dll"
+        "${SXC_SLANG_BINARY_DIR}/$<CONFIG>/lib/slang-compiler.lib"
+    )
+    add_custom_command(
+        OUTPUT ${SXC_SLANG_BUILD_OUTPUTS}
         COMMAND "${CMAKE_COMMAND}" --build "${SXC_SLANG_BINARY_DIR}"
             --config $<CONFIG>
             --target slang slang-glslang copy-dxcompiler copy-dxil
@@ -80,6 +88,7 @@ if(CMAKE_GENERATOR MATCHES "^Visual Studio")
         COMMENT "Building the Slang compiler dependency"
         VERBATIM
     )
+    add_custom_target(sxc_slang_build DEPENDS ${SXC_SLANG_BUILD_OUTPUTS})
     set_property(TARGET sxc_slang_build PROPERTY FOLDER "_Dependencies")
     add_dependencies(sxc_slang sxc_slang_build)
     set(SXC_SLANG_LINK_TARGET sxc_slang)

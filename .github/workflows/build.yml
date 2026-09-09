@@ -5,6 +5,12 @@ on:
   pull_request:
   workflow_dispatch:
 
+permissions:
+  contents: read
+
+env:
+  CONTINUOUS_BUILDS_TO_KEEP: 5
+
 jobs:
   format:
     runs-on: ubuntu-24.04
@@ -55,8 +61,51 @@ jobs:
         run: cmake --build build --config ${{ matrix.config }} --target SXC --parallel
       - name: Package SDK
         run: cmake --install build --config ${{ matrix.config }} --prefix sdk
+      - name: Create continuous-build archive
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main' && matrix.config == 'Release'
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Path dist -Force | Out-Null
+          if ('${{ runner.os }}' -eq 'Windows') {
+            Compress-Archive -Path sdk/* -DestinationPath "dist/sxc-sdk-windows-release-${{ github.sha }}.zip"
+          } else {
+            tar -czf "dist/sxc-sdk-linux-release-${{ github.sha }}.tar.gz" -C sdk .
+          }
       - name: Upload SDK
         uses: actions/upload-artifact@v4
         with:
           name: ${{ matrix.artifact }}
           path: sdk/
+      - name: Stage continuous-build archive
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main' && matrix.config == 'Release'
+        uses: actions/upload-artifact@v4
+        with:
+          name: continuous-${{ matrix.artifact }}
+          path: dist/
+          retention-days: 1
+
+  publish-continuous:
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    needs: build
+    runs-on: ubuntu-24.04
+    permissions:
+      actions: read
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - name: Download release archives
+        uses: actions/download-artifact@v5
+        with:
+          pattern: continuous-*
+          path: dist
+          merge-multiple: true
+      - name: Publish continuous builds
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          ./.github/scripts/publish-continuous.ps1 `
+            -Repository '${{ github.repository }}' `
+            -CommitSha '${{ github.sha }}' `
+            -Keep $env:CONTINUOUS_BUILDS_TO_KEEP `
+            -DistDirectory dist
