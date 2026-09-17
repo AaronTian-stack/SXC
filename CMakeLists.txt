@@ -5,17 +5,7 @@ set_property(GLOBAL PROPERTY USE_FOLDERS ON)
 include(CMakePackageConfigHelpers)
 include(GNUInstallDirs)
 include(${CMAKE_CURRENT_SOURCE_DIR}/cmake/SlangCompiler.cmake)
-
-set(SXC_TBB_ROOT "${CMAKE_CURRENT_SOURCE_DIR}/external/tbb")
-if(WIN32)
-    set(TBB_DIR "${SXC_TBB_ROOT}/oneapi-tbb-2022.3.0-win/oneapi-tbb-2022.3.0/lib/cmake/tbb")
-elseif(APPLE)
-    set(TBB_DIR "${SXC_TBB_ROOT}/oneapi-tbb-2022.3.0-mac/oneapi-tbb-2022.3.0/lib/cmake/tbb")
-else()
-    set(TBB_DIR "${SXC_TBB_ROOT}/oneapi-tbb-2022.3.0-lin/oneapi-tbb-2022.3.0/lib/cmake/tbb")
-endif()
-
-find_package(TBB CONFIG REQUIRED COMPONENTS tbb)
+include(${CMAKE_CURRENT_SOURCE_DIR}/cmake/OneTBB.cmake)
 
 add_library(SXCShaderBlob INTERFACE)
 add_library(SXC::ShaderBlob ALIAS SXCShaderBlob)

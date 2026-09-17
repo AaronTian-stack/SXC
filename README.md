@@ -95,7 +95,7 @@ cmake --preset windows-release
 cmake --build build --config Release --target SXC --parallel
 ```
 
-On Linux, use the `linux-release` preset. SXC requires CMake 3.21 or newer and a C++20 compiler. The repository includes the header-only dependencies and platform oneTBB packages used by SXC.
+On Linux, use the `linux-release` preset. SXC requires CMake 3.21 or newer and a C++20 compiler
 
 ## Example
 
